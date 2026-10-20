@@ -8,8 +8,8 @@ const PERCENT = 100;
 /** 缓存代理统计: 命中率与省流字节数. */
 export function CacheProxyPage(): JSX.Element {
 	const { result, loading } = usePoll(cacheStats);
-	if (loading && !result) return <EmptyState title="读取中" description="正在连接缓存代理 (8898)" />;
-	if (!result?.ok) return <EmptyState title="未连接" description={"缓存代理不可达: " + (result && "error" in result ? result.error : "")} />;
+	if (loading && !result) return <EmptyState text="读取中" hint="正在连接缓存代理 (8898)" />;
+	if (!result?.ok) return <EmptyState text="未连接" hint={"缓存代理不可达: " + (result && "error" in result ? result.error : "")} />;
 
 	const s = result.data;
 	const hits = s.hits ?? 0;

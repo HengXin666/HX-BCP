@@ -15,7 +15,7 @@ const LABEL: Record<string, string> = { green: "通过", yellow: "待复核", re
 /** 指纹评分: 只展示自检结论, 复算命令写在页面上. */
 export function FingerprintPage(): JSX.Element {
 	const { result, loading } = usePoll(fingerprintVerdict);
-	if (loading && !result) return <EmptyState title="读取中" description="正在读取自检结论" />;
+	if (loading && !result) return <EmptyState text="读取中" hint="正在读取自检结论" />;
 
 	const data = result?.ok ? result.data : { verdict: "unknown" as const };
 	return (

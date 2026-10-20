@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@import "@hx/ui/tokens.css";
+@import "@hx/ui/styles.css";
+@source "../../node_modules/@hx/ui/dist";
 
 body {
 	margin: 0;

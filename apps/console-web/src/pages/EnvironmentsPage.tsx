@@ -7,11 +7,11 @@ import { usePoll } from "../lib/hooks";
 export function EnvironmentsPage(): JSX.Element {
 	const { result, loading } = usePoll(listEnvs);
 
-	if (loading && !result) return <EmptyState title="读取中" description="正在连接浏览器服务 (8325)" />;
-	if (!result?.ok) return <EmptyState title="未连接" description={"浏览器服务不可达: " + (result && "error" in result ? result.error : "")} />;
+	if (loading && !result) return <EmptyState text="读取中" hint="正在连接浏览器服务 (8325)" />;
+	if (!result?.ok) return <EmptyState text="未连接" hint={"浏览器服务不可达: " + (result && "error" in result ? result.error : "")} />;
 
 	const envs = result.data;
-	if (envs.length === 0) return <EmptyState title="还没有环境" description="用 hxb new --name demo --seed demo-1 创建一个" />;
+	if (envs.length === 0) return <EmptyState text="还没有环境" hint="用 hxb new --name demo --seed demo-1 创建一个" />;
 
 	return (
 		<div className="flex flex-col gap-2">

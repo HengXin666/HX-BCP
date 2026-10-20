@@ -1,23 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
-/** @hx/ui 以源码形式取自 GitHub, 这里把包入口指向它的 src. */
-function uiSrc(): string {
-	return resolve(dirname(fileURLToPath(import.meta.resolve("@hx/ui/package.json"))), "src");
-}
-
+/** 控制台: 组件与样式全部来自 @hx/ui 的发布产物, 不配别名, 验证 tarball 能否当普通依赖用. */
 export default defineConfig({
 	plugins: [react(), tailwindcss()],
-	resolve: {
-		alias: [
-			{ find: "@hx/ui/styles.css", replacement: resolve(uiSrc(), "styles.css") },
-			{ find: "@hx/ui/tokens.css", replacement: resolve(uiSrc(), "tokens.css") },
-			{ find: /^@hx\/ui$/, replacement: resolve(uiSrc(), "index.ts") },
-		],
-	},
 	server: {
 		port: 8940,
 		host: "127.0.0.1",
