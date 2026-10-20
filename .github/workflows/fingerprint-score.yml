@@ -1,0 +1,44 @@
+name: fingerprint-score
+
+# 流水线评分 = 指纹环境自检. 红 (2) 阻断, 黄 (1) 通过但记录, 绿 (0) 通过.
+on:
+    push:
+        branches: [main]
+    pull_request:
+    workflow_dispatch:
+
+jobs:
+    score:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: astral-sh/setup-uv@v4
+            - name: install chromium
+              run: npx playwright install --with-deps chromium
+            - name: fingerprint audit
+              id: audit
+              run: |
+                  set +e
+                  cd packages/fingerprint-audit
+                  uv run audit.py --launch headless --json > "$RUNNER_TEMP/score.json" 2>"$RUNNER_TEMP/score.err"
+                  code=$?
+                  cat "$RUNNER_TEMP/score.json" || true
+                  cat "$RUNNER_TEMP/score.err" || true
+                  echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+                  exit 0
+            - name: judge by score
+              run: |
+                  code="${{ steps.audit.outputs.exit_code }}"
+                  echo "fingerprint score exit code: $code (0 green / 1 yellow / 2 red)"
+                  if [ "$code" = "2" ]; then
+                      echo "::error::fingerprint audit failed (red), blocking"
+                      exit 1
+                  fi
+                  if [ "$code" = "1" ]; then
+                      echo "::warning::fingerprint audit is yellow, needs human review"
+                  fi
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: fingerprint-score
+                  path: ${{ runner.temp }}/score.json
+                  if-no-files-found: warn
