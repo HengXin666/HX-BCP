@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hx/ui": "github:HengXin666/HX-UI",
+    "@hx/ui": "https://github.com/HengXin666/HX-UI/releases/download/v0.1.0/hx-ui-0.1.0.tgz",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
