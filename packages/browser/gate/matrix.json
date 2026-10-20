@@ -1,0 +1,20 @@
+[
+  {"id": "stock-chrome-headed", "group": "stock", "browser": "chrome", "headed": true, "label": "\u672c\u673a\u8c37\u6b4c \u6709\u5934"},
+  {"id": "stock-chrome-headless", "group": "stock", "browser": "chrome", "headed": false, "label": "\u672c\u673a\u8c37\u6b4c \u65e0\u5934"},
+  {"id": "stock-firefox-headed", "group": "stock", "browser": "firefox", "headed": true, "label": "\u672c\u673a\u706b\u72d0 \u6709\u5934"},
+  {"id": "stock-firefox-headless", "group": "stock", "browser": "firefox", "headed": false, "label": "\u672c\u673a\u706b\u72d0 \u65e0\u5934"},
+  {"id": "hx-cloak-headed", "group": "hx", "kernel": "cloak", "headed": true, "label": "cloak \u6709\u5934"},
+  {"id": "hx-cloak-headless", "group": "hx", "kernel": "cloak", "headed": false, "label": "cloak \u65e0\u5934"},
+  {"id": "hx-chrome-headed", "group": "hx", "kernel": "chrome", "headed": true, "label": "hx chrome \u6709\u5934"},
+  {"id": "hx-chrome-headless", "group": "hx", "kernel": "chrome", "headed": false, "label": "hx chrome \u65e0\u5934"},
+  {"id": "hx-chromium-headed", "group": "hx", "kernel": "chromium", "headed": true, "label": "hx chromium \u6709\u5934"},
+  {"id": "hx-chromium-headless", "group": "hx", "kernel": "chromium", "headed": false, "label": "hx chromium \u65e0\u5934"},
+  {"id": "hx-edge-headed", "group": "hx", "kernel": "edge", "headed": true, "label": "hx edge \u6709\u5934"},
+  {"id": "hx-edge-headless", "group": "hx", "kernel": "edge", "headed": false, "label": "hx edge \u65e0\u5934"},
+  {"id": "hx-brave-headed", "group": "hx", "kernel": "brave", "headed": true, "label": "hx brave \u6709\u5934"},
+  {"id": "hx-brave-headless", "group": "hx", "kernel": "brave", "headed": false, "label": "hx brave \u65e0\u5934"},
+  {"id": "hx-firefox-headed", "group": "hx", "kernel": "firefox", "headed": true, "label": "hx firefox \u6709\u5934"},
+  {"id": "hx-firefox-headless", "group": "hx", "kernel": "firefox", "headed": false, "label": "hx firefox \u65e0\u5934"},
+  {"id": "hx-librewolf-headed", "group": "hx", "kernel": "librewolf", "headed": true, "label": "hx librewolf \u6709\u5934"},
+  {"id": "hx-librewolf-headless", "group": "hx", "kernel": "librewolf", "headed": false, "label": "hx librewolf \u65e0\u5934"}
+]

@@ -1,0 +1,63 @@
+{
+  "name": "local-browser-env",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1 --port 5177\" \"wait-on http://127.0.0.1:5177 && cross-env LOCAL_ENV_DEV=1 node scripts/run-electron.cjs\"",
+    "build": "node scripts/generate-icon.cjs && vite build",
+    "start": "node scripts/run-electron.cjs",
+    "package:win": "npm run build && node scripts/package-win.cjs",
+    "installer:win": "npm run package:win && node scripts/build-installer.cjs",
+    "scan:defender": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/scan-defender.ps1",
+    "dist:win": "npm run build && electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.apologetic.browser",
+    "productName": "Apologetic特供版",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "scripts/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "data",
+        "to": "data",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-${arch}-portable.${ext}"
+    }
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "lucide-react": "^0.562.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.0.1",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.15.3",
+    "wait-on": "^9.0.3"
+  }
+}

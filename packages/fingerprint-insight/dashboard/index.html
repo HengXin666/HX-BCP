@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fp-insight · 浏览器指纹探测</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><b>fp-insight</b><small>fingerprint surface probe</small></div>
+    <span class="pill" id="curSid">-</span>
+    <span class="pill" title="当前页面">页面 <b id="curUrl" style="color:var(--cy);font-weight:500">-</b></span>
+    <span class="pill" title="会话时区">tz <span id="curTz" style="color:var(--am)">-</span></span>
+    <span class="pill on" id="livePill"><span class="dot live" id="liveDot"></span> 观测中</span>
+    <div class="spacer"></div>
+    <div class="stat"><b id="hooked">0</b><span>会话</span></div>
+    <div class="stat"><b id="evCount">0</b><span>事件</span></div>
+    <div class="stat"><b id="invCount">0</b><span>恒定量</span></div>
+    <div class="stat"><b id="hubStats">0</b><span>入库</span></div>
+  </header>
+
+  <main>
+    <!-- ------------------------------------------------ 左: 控制 -->
+    <section class="col">
+      <div class="card">
+        <h2>目标 <span class="r">启动一条被观测的会话</span></h2>
+        <div class="body">
+          <label class="f" for="url">URL</label>
+          <input type="text" id="url" value="https://example.com" spellcheck="false">
+          <label class="f" for="label">标签 (可选)</label>
+          <input type="text" id="label" placeholder="如: 某站首页" spellcheck="false">
+          <div class="row" style="margin-top:10px">
+            <label class="f" style="flex:1;margin:0" for="tz">时区</label>
+            <label class="f" style="flex:1;margin:0" for="proxy">代理</label>
+          </div>
+          <div class="row" style="margin-top:2px">
+            <input type="text" id="tz" style="flex:1" placeholder="Asia/Shanghai" spellcheck="false">
+            <input type="text" id="proxy" style="flex:1" placeholder="http://127.0.0.1:7892" spellcheck="false">
+          </div>
+          <div class="row" style="margin-top:2px">
+            <input type="text" id="w" style="flex:1" value="1440">
+            <input type="text" id="h" style="flex:1" value="900">
+          </div>
+          <label class="chk"><input type="checkbox" id="headless" checked> 无头模式 (无头 UA 会被站点识破, 见页脚)</label>
+          <div class="row">
+            <button class="primary" id="launch">开始观测</button>
+            <button class="danger" id="stop" disabled>关闭会话</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>动作 <span class="r">每步都记进时间轴</span></h2>
+        <div class="body">
+          <label class="f" for="navUrl">导航</label>
+          <input type="text" id="navUrl" placeholder="https://…" spellcheck="false">
+          <div class="row"><button id="nav" disabled>导航</button></div>
+          <label class="f" for="markLabel">打点标签</label>
+          <input type="text" id="markLabel" value="before-login" spellcheck="false">
+          <div class="row">
+            <button id="mark" disabled>打点</button>
+            <button id="shot" disabled>截图</button>
+          </div>
+          <label class="f" for="clearWhat">清理存储 (做对照实验)</label>
+          <div class="row" style="margin-top:0">
+            <select id="clearWhat" style="flex:1">
+              <option value="all">cookies + storage + cache</option>
+              <option value="cookies">仅 cookies</option>
+              <option value="storage">仅 storage</option>
+              <option value="cache">仅 cache</option>
+            </select>
+            <button id="clear" disabled>清理</button>
+          </div>
+          <div class="hint" id="status" style="border:0;padding:8px 0 0">就绪</div>
+        </div>
+      </div>
+
+      <div class="card" style="flex:1;min-height:120px">
+        <h2>时间轴 <span class="r">动作 / 打点</span></h2>
+        <div class="body tight" id="moments">
+          <div class="empty">尚无动作</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------ 中: 画像 + 事件 -->
+    <section class="col mid">
+      <div class="card" style="flex:0 0 auto;max-height:39%">
+        <h2>技术画像 <span class="n" id="apiCount">0</span> <span class="r">被站点读取的指纹面 (按精确次数)</span></h2>
+        <div class="body tight" style="overflow:auto">
+          <div class="apis" id="apis"><div class="empty">尚未观测到任何指纹面</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="flex:1">
+        <h2>调用流水 <span class="r">参数 / 返回值 / 采集位置</span>
+          <span class="r" style="margin-left:auto">
+            <input type="text" id="q" placeholder="过滤…" style="width:120px;padding:3px 7px;font-size:10px">
+            <select id="cat" style="width:96px;padding:3px 6px;font-size:10px">
+              <option value="">全部类别</option>
+              <option>canvas</option><option>webgl</option><option>audio</option>
+              <option>navigator</option><option>screen</option><option>locale</option>
+              <option>permissions</option><option>webrtc</option><option>font</option>
+              <option>storage</option><option>detect</option><option>worker</option><option>dom</option>
+            </select>
+            <button id="applyFilter" style="padding:3px 8px;font-size:10px">应用</button>
+          </span>
+        </h2>
+        <div class="body tight" style="flex:1">
+          <table>
+            <thead><tr>
+              <th style="width:64px">时刻</th><th style="width:44px">第N次</th><th style="width:78px">类别</th>
+              <th style="width:210px">API</th><th>参数</th><th>返回</th><th>采集位置</th>
+            </tr></thead>
+            <tbody id="calls"></tbody>
+          </table>
+        </div>
+        <div class="legend">
+          <span><b>时刻</b> 收到事件的本地时间</span>
+          <span><b>第N次</b> 该 API 被读的第几次 (精确计数, 不受上报节流影响)</span>
+          <label class="chk" style="margin:0"><input type="checkbox" id="liveToggle" checked> 实时跟随</label>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------ 右: 详情 / 纠察 -->
+    <section class="col">
+      <div class="card" style="flex:0 0 auto;max-height:47%">
+        <h2>调用详情 <span class="r">调用栈 = 分析入口</span></h2>
+        <div class="detail" id="detail"><div class="empty">点中间任意一行</div></div>
+      </div>
+
+      <div class="card" style="flex:1">
+        <div class="tabs">
+          <button data-tab="live" class="on">说明</button>
+          <button data-tab="inv">恒定量</button>
+          <button data-tab="all">全部</button>
+        </div>
+        <div class="body tight" style="flex:1">
+          <div id="invBody"><div class="hint" style="border:0">事件流在中间那栏。切到 <b>恒定量</b> 看运行期不变的数据, 切到 <b>全部</b> 看含变化的量。</div></div>
+        </div>
+        <div class="hint">
+          恒定量 = 运行期从不变化的数据 (cookie、硬件、字体…)。
+          这是反爬用来认人的锚点, 也是<b>变量纠察</b>要盯的东西。
+        </div>
+      </div>
+
+      <div class="card" style="flex:0 0 auto">
+        <h2>快照 <span class="r" id="snapUrl">-</span>
+          <span class="r" style="margin-left:auto">tz <span id="snapTz">-</span> · 调用 <span id="snapTotal">-</span></span>
+        </h2>
+        <div class="body tight" id="shotBox"><div class="empty">点「截图」取当前画面</div></div>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

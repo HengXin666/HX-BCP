@@ -1,0 +1,10 @@
+# NOTICE
+
+本仓库包含来自第三方的代码或设计参考, 按其许可使用:
+
+| 来源 | 许可 | 用途 |
+|---|---|---|
+| nodecloak (https://github.com/nodecloak/nodecloak) | 见上游仓库 | 指纹浏览器设计参考 |
+| HX-UI (https://github.com/HengXin666/HX-UI) | MIT | 控制台 UI 组件 |
+
+缓存代理与指纹自检的原始实现来自作者本人的私有仓库, 在此以 MIT 重新发布。

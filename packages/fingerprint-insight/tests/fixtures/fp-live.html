@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>fp-insight 指纹夹具</title></head>
+<body>
+<h1>fp-insight live fixture</h1>
+<div id="out">running…</div>
+<script>
+/* 端到端回归夹具: 刻意调用每一类指纹面, 且每个 API 都从一个有名字的函数里调用,
+   用来验证工具的**堆栈解析**是否真的指向采集方而不是探针自己。
+   刻意都在首次用户交互前后都调用一遍 —— 变量纠察要能看出"哪些值变了"。 */
+var LOG = [];
+function mark(s) { LOG.push(s); document.getElementById("out").textContent = LOG.join(" | "); }
+
+function readStatic() {
+  var a = navigator.userAgent, b = navigator.platform, c = navigator.hardwareConcurrency;
+  var d = navigator.deviceMemory, e = navigator.languages, f = navigator.maxTouchPoints;
+  var g = screen.width, h = screen.height, i = screen.colorDepth, j = window.devicePixelRatio;
+  var k = screen.availWidth, l = screen.availHeight, m = navigator.vendor;
+  var n = navigator.plugins.length, o = navigator.mimeTypes.length;
+  return [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o].length;
+}
+
+function readCanvas() {
+  var cv = document.createElement("canvas");
+  cv.width = 220; cv.height = 40;
+  var ctx = cv.getContext("2d");
+  ctx.textBaseline = "top";
+  ctx.font = "14px 'Arial'";
+  ctx.fillStyle = "#f60";
+  ctx.fillRect(0, 0, 100, 20);
+  ctx.fillStyle = "#069";
+  ctx.fillText("fp-insight-\u6d4b\u8bd5-(\u2022\u0301\u1d55\u2022\u0300)", 2, 2);
+  ctx.strokeStyle = "rgba(102,204,0,0.7)";
+  ctx.beginPath(); ctx.arc(50, 20, 15, 0, Math.PI * 2); ctx.stroke();
+  var url = cv.toDataURL();
+  var px = ctx.getImageData(0, 0, 10, 10).data;
+  var m = ctx.measureText("abc").width;
+  return url.length + px.length + m;
+}
+
+function readWebGL() {
+  var cv = document.createElement("canvas");
+  var gl = cv.getContext("webgl") || cv.getContext("experimental-webgl");
+  if (!gl) return -1;
+  var out = [];
+  out.push(gl.getParameter(gl.VERSION));
+  out.push(gl.getParameter(gl.VENDOR));
+  out.push(gl.getParameter(gl.RENDERER));
+  out.push(gl.getParameter(gl.MAX_TEXTURE_SIZE));
+  out.push(gl.getParameter(gl.SHADING_LANGUAGE_VERSION));
+  out.push((gl.getSupportedExtensions() || []).join(",").length);
+  out.push(gl.getExtension("WEBGL_debug_renderer_info") ? 1 : 0);
+  var sf = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+  out.push(sf ? sf.precision : -1);
+  var attrs = gl.getContextAttributes();
+  out.push(attrs ? 1 : 0);
+  var gl2 = cv.getContext("webgl2");
+  if (gl2) { out.push(gl2.getParameter(gl2.MAX_VERTEX_UNIFORM_VECTORS)); }
+  return out.join("|").length;
+}
+
+async function readAudio() {
+  var AC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (!AC) { mark("audio-unavailable"); return -1; }
+  var ctx = new AC(1, 44100, 44100);
+  var osc = ctx.createOscillator();
+  osc.type = "triangle";
+  osc.frequency.value = 10000;
+  var comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -50; comp.knee.value = 40; comp.ratio.value = 12;
+  comp.attack.value = 0; comp.release.value = 0.25;
+  var gain = ctx.createGain();
+  osc.connect(comp); comp.connect(gain); gain.connect(ctx.destination);
+  osc.start(0);
+  var buf = await ctx.startRendering();
+  var d = buf.getChannelData(0);
+  var sum = 0; for (var i = 4500; i < 5000; i++) sum += Math.abs(d[i]);
+  return sum;
+}
+
+function readLocale() {
+  var a = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  var b = new Date().getTimezoneOffset();
+  var c = Intl.DateTimeFormat().resolvedOptions().locale;
+  var d = Intl.NumberFormat().resolvedOptions().numberingSystem;
+  var e = new Date().toString();
+  return [a,b,c,d,e].join("|").length;
+}
+
+function readFonts() {
+  var base = ["monospace", "sans-serif", "serif"];
+  var probe = ["Arial","Courier New","Georgia","Tahoma","Times New Roman","Verdana","\u5fae\u8f6f\u96c5\u9ed1","\u5b8b\u4f53"];
+  var cv = document.createElement("canvas");
+  var ctx = cv.getContext("2d");
+  var found = 0;
+  for (var i = 0; i < probe.length; i++) {
+    ctx.font = "16px " + base[i % 3];
+    var w0 = ctx.measureText("mmmmmmmmmmlli").width;
+    ctx.font = "16px '" + probe[i] + "', " + base[i % 3];
+    var w1 = ctx.measureText("mmmmmmmmlli").width;
+    if (Math.abs(w0 - w1) > 0.01) found++;
+  }
+  if (document.fonts) { var _ = document.fonts.check("16px Arial"); }
+  return found;
+}
+
+async function readPermissions() {
+  var names = ["notifications","geolocation","camera","microphone","clipboard-read","midi","background-sync"];
+  var res = [];
+  for (var i = 0; i < names.length; i++) {
+    try { var st = await navigator.permissions.query({ name: names[i] }); res.push(st.state); }
+    catch (e) { res.push("err"); }
+  }
+  if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+    try { var dev = await navigator.mediaDevices.enumerateDevices(); res.push("dev" + dev.length); } catch (e) {}
+  }
+  return res.join(",").length;
+}
+
+function readStorage() {
+  try { localStorage.setItem("fpi_probe_ts", String(Date.now())); } catch (e) {}
+  try { var v = localStorage.getItem("fpi_probe_ts"); } catch (e) {}
+  try { sessionStorage.setItem("fpi_s", "1"); } catch (e) {}
+  try { document.cookie ? 1 : 0; } catch (e) {}
+  return 1;
+}
+
+function readRTC() {
+  var PC = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+  if (!PC) return -1;
+  try {
+    var pc = new PC({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+    if (pc.createDataChannel) pc.createDataChannel("fpi");
+    if (pc.createOffer) pc.createOffer().then(function (o) { if (o && o.sdp) {} }).catch(function(){});
+    setTimeout(function () { try { pc.close(); } catch (e) {} }, 700);
+    return 1;
+  } catch (e) { return 0; }
+}
+
+async function runAll(tag) {
+  mark("run:" + tag);
+  readStatic(); mark("static");
+  readCanvas(); mark("canvas");
+  readWebGL(); mark("webgl");
+  try { await readAudio(); mark("audio"); } catch (e) { mark("audio-err"); }
+  readLocale(); mark("locale");
+  readFonts(); mark("fonts");
+  try { await readPermissions(); mark("perms"); } catch (e) { mark("perms-err"); }
+  readStorage(); mark("storage");
+  readRTC(); mark("rtc");
+  mark("done:" + tag);
+}
+
+window.__fpiFixture = { runAll: runAll, log: function () { return LOG.slice(); } };
+setTimeout(function () { runAll("boot"); }, 300);
+/* 第二次调用: 变量纠察应能看出哪些值在两次之间发生了变化 (例如 localStorage) */
+setTimeout(function () { runAll("repeat"); }, 4200);
+</script>
+</body>
+</html>

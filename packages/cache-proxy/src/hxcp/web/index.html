@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hxcp 抓包流</title>
+<!-- 图标 = 功能特征 (请求流穿过旁路缓存层)。用相对路径而不是 /favicon.svg:
+     本页经 HX-Webx /proxy/hxcp/ 打开, 以 / 开头的引用会丢挂载前缀。 -->
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<!--
+  单文件前端, 由 hxcp.api 直接托管 (src/hxcp/web/)。
+
+  为什么是原生 JS 而不是 vite/react:
+    · hxcp 是 Python + uv 项目, 自带 api.py 已在跑; 引入 npm 构建链会让"能跑起来"
+      变成"先 npm install 再 build 再托管产物" —— 为了一个看请求列表的界面不值。
+    · 本仓已有前端约定是 Vite + React (freebuff-rotator / gh-registrar), 但那些都有
+      node 工具链与独立进程; hxcp 没有, 且它的验证闭环全在 uv 里。
+    · 需要的交互只有"过滤 + 选中 + 展开", 原生 DOM 足够, 且没有构建产物不一致的风险。
+
+  经 HX-Webx /proxy/hxcp/ 打开时, 资源与 API 都在子路径下 —— 见 basePrefix()。
+  规则来自 .agents/notes/implemented/bug-fix/2026-09-19-devvite-frontends-need-subpath-adapter.md
+  与 2026-09-18-rotator-webx-subpath.md: 任何以 / 开头的引用都会丢挂载前缀。
+-->
+<style>
+  :root{
+    --ink:#0a0e13; --panel:#111820; --panel2:#161f29; --line:#22303d;
+    --fg:#cfd8e3; --dim:#7b8b9d; --faint:#4d5d6e;
+    --amber:#e8a33d; --cyan:#4ec9d4; --green:#5fbf82; --red:#d9574f; --violet:#9a8cd0;
+    --mono:"JetBrains Mono","SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+    --display:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(1200px 700px at 12% -10%, #16222e 0%, transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, #1a1a24 0%, transparent 55%),
+      var(--ink);
+    color:var(--fg); font:13px/1.5 var(--mono);
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--cyan)}
+  header{
+    display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+    padding:14px 18px 10px; border-bottom:1px solid var(--line);
+    position:sticky; top:0; background:rgba(10,14,19,.92); backdrop-filter:blur(8px); z-index:5;
+  }
+  h1{font:600 20px/1 var(--display); letter-spacing:.4px; margin:0}
+  h1 span{color:var(--amber)}
+  .sub{color:var(--dim); font-size:11.5px}
+  .pulse{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--faint); margin-right:6px; vertical-align:middle}
+  .pulse.on{background:var(--green); box-shadow:0 0 0 0 rgba(95,191,130,.6); animation:p 2s infinite}
+  @keyframes p{70%{box-shadow:0 0 0 7px rgba(95,191,130,0)}100%{box-shadow:0 0 0 0 rgba(95,191,130,0)}}
+
+  .bar{display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:10px 18px; border-bottom:1px solid var(--line)}
+  input,select,button{
+    font:12px var(--mono); color:var(--fg); background:var(--panel);
+    border:1px solid var(--line); border-radius:5px; padding:5px 8px; outline:none;
+  }
+  input{width:150px}
+  input:focus,select:focus{border-color:var(--amber)}
+  button{cursor:pointer; transition:border-color .15s,color .15s}
+  button:hover{border-color:var(--amber); color:#fff}
+  button.pri{border-color:#3a4a5a; background:var(--panel2)}
+  label.f{display:flex; align-items:center; gap:5px; color:var(--dim); white-space:nowrap}
+  .spacer{flex:1}
+  .stat{color:var(--dim); font-size:11.5px; white-space:nowrap}
+  .stat b{color:var(--fg); font-weight:500}
+
+  /* 时序条: 请求密度一眼可见, 不做图表库 */
+  #spark{display:flex; align-items:flex-end; gap:1px; height:34px; padding:0 18px 0; margin:8px 0 0; overflow:hidden}
+  #spark i{flex:1; background:linear-gradient(180deg,var(--cyan),#1d4a52); min-height:1px; border-radius:1px 1px 0 0; opacity:.75}
+  #spark i.err{background:linear-gradient(180deg,var(--red),#4a2320)}
+  #sparkLegend{display:flex; justify-content:space-between; padding:2px 18px 8px; color:var(--faint); font-size:10.5px; border-bottom:1px solid var(--line)}
+
+  main{display:grid; grid-template-columns:minmax(340px,46%) 1fr; height:calc(100vh - 190px); min-height:320px}
+  @media (max-width:960px){ main{grid-template-columns:1fr; height:auto} .detail{border-left:none!important; border-top:1px solid var(--line)} }
+
+  .list{overflow:auto; border-right:1px solid var(--line)}
+  table{width:100%; border-collapse:collapse}
+  thead th{
+    position:sticky; top:0; background:var(--panel); color:var(--dim); font-weight:500;
+    text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); font-size:11px; z-index:2;
+  }
+  tbody tr{cursor:pointer; border-bottom:1px solid rgba(34,48,61,.5)}
+  tbody tr:hover{background:var(--panel2)}
+  tbody tr.sel{background:#1d2733; box-shadow:inset 3px 0 0 var(--amber)}
+  td{padding:5px 8px; vertical-align:top; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:260px}
+  .seq{color:var(--faint); font-size:10.5px; text-align:right; width:1%}
+  .t{color:var(--dim)}
+  .method{color:var(--amber); font-weight:600}
+  .st{font-weight:600}
+  .s2{color:var(--green)} .s3{color:var(--cyan)} .s4{color:var(--amber)} .s5{color:var(--red)} .s0{color:var(--faint)}
+  .path{color:var(--fg)}
+  .host{color:var(--dim); font-size:11px}
+  .badge{font-size:10px; padding:1px 5px; border-radius:3px; border:1px solid var(--line); color:var(--dim)}
+  .badge.hit{color:var(--green); border-color:#2c5340}
+  .badge.skip{color:var(--amber); border-color:#5a4526}
+  .badge.sens{color:var(--red); border-color:#5a2f2c}
+  .gap{color:var(--faint); font-size:10.5px; width:1%}
+  .more{padding:10px; text-align:center}
+
+  .detail{overflow:auto; padding:14px 16px}
+  .detail h2{font:600 13px var(--mono); margin:0 0 4px; color:var(--fg); word-break:break-all}
+  .kv{display:grid; grid-template-columns:120px 1fr; gap:2px 10px; margin:8px 0 14px; font-size:12px}
+  .kv dt{color:var(--dim)} .kv dd{margin:0; word-break:break-all}
+  .tabs{display:flex; gap:6px; margin:14px 0 8px; flex-wrap:wrap}
+  .tabs button.on{border-color:var(--amber); color:#fff; background:var(--panel2)}
+  pre{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:9px 10px; overflow:auto; max-height:44vh; margin:0 0 12px;
+    font-size:11.5px; line-height:1.45; white-space:pre-wrap; word-break:break-all;
+  }
+  .hd{display:grid; grid-template-columns:minmax(120px,26%) 1fr; gap:1px 10px; font-size:11.5px}
+  .hd .k{color:var(--cyan)} .hd .v{color:var(--fg); word-break:break-all}
+  .hd .k.miss{color:var(--red)}
+  .empty{color:var(--faint); padding:22px; text-align:center}
+  .warn{color:var(--amber); background:#241d10; border:1px solid #5a4526; border-radius:5px; padding:7px 9px; margin:8px 0 12px; font-size:11.5px}
+  .note{color:var(--faint); font-size:11px; margin:6px 0 12px}
+  code{background:var(--panel2); padding:1px 4px; border-radius:3px}
+</style>
+</head>
+<body>
+<header>
+  <h1>HX-Capture-Proxy <span>/ 抓包流</span></h1>
+  <span class="sub"><span id="pulse" class="pulse"></span><span id="engineState">引擎状态: --</span></span>
+  <span class="sub" id="rootPath"></span>
+</header>
+
+<div class="bar">
+  <label class="f">host <input id="fHost" placeholder="api.github.com"></label>
+  <label class="f">状态 <input id="fStatus" placeholder="200" size="6" style="width:62px"></label>
+  <label class="f">关键字 <input id="fQ" placeholder="sign / token"></label>
+  <label class="f">类型
+    <select id="fKind"><option value="">全部</option><option value="flow">flow</option><option value="hit">hit</option></select>
+  </label>
+  <label class="f">范围
+    <select id="fDays"><option value="1">最近 1 天</option><option value="3">3 天</option><option value="7">7 天</option><option value="0">全部</option></select>
+  </label>
+  <button class="pri" id="btnReload">查询</button>
+  <label class="f"><input type="checkbox" id="auto" style="width:auto"> 自动刷新 5s</label>
+  <span class="spacer"></span>
+  <span class="stat" id="statLine">--</span>
+</div>
+
+<div id="spark"></div>
+<div id="sparkLegend"><span id="tMin"></span><span>请求时序 (按时间分布, 红色=5xx/4xx)</span><span id="tMax"></span></div>
+
+<main>
+  <div class="list" id="listPane">
+    <table>
+      <thead><tr>
+        <th class="seq">#</th><th>时间</th><th>+Δ</th><th>方法</th><th>host / path</th>
+        <th>状态</th><th>大小</th><th>判定</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="more"><button id="btnMore" style="display:none">加载更多</button></div>
+  </div>
+  <div class="detail" id="detail">
+    <div class="empty">选一条请求看头与体</div>
+  </div>
+</main>
+
+<script>
+"use strict";
+/* 子路径挂载前缀。经 HX-Webx /proxy/hxcp/ 打开时, 以 / 开头的 fetch 会打到面板自己。
+   直连 8898 时前缀为空 —— 两种进入方式行为一致, 这是本仓既有约定。 */
+function basePrefix(){
+  var m = location.pathname.match(/^(\/proxy\/[^\/]+)/);
+  return m ? m[1] : "";
+}
+var API = basePrefix();
+console.log("[hxcp] 挂载前缀 =", API || "(根)");
+
+var state = { rows: [], offset: 0, pageSize: 300, sel: null, hasMore: false, tab: "overview", body: null, stats: null };
+
+/* 初始过滤从 URL 读 (?host=&status=&q=&kind=&days=):
+   抓包视图是要被人贴来贴去的 ("看这条请求"), 刷新与分享都该保持同一视图。 */
+(function initFromUrl(){
+  var sp = new URLSearchParams(location.search);
+  ["host", "status", "q"].forEach(function(k){
+    var v = sp.get(k);
+    if (v) $("f" + k.charAt(0).toUpperCase() + k.slice(1)).value = v;
+  });
+  ["kind", "days"].forEach(function(k){
+    var v = sp.get(k), el = $("f" + k.charAt(0).toUpperCase() + k.slice(1));
+    if (v && Array.prototype.some.call(el.options, function(o){ return o.value === v; })) el.value = v;
+  });
+})();
+
+function $(id){ return document.getElementById(id); }
+function txt(s){ var d = document.createElement("div"); d.textContent = String(s == null ? "" : s); return d.innerHTML; }
+
+function qs(){
+  var p = [];
+  var h = $("fHost").value.trim(), s = $("fStatus").value.trim(),
+      q = $("fQ").value.trim(), k = $("fKind").value, d = $("fDays").value;
+  if (h) p.push("host=" + encodeURIComponent(h));
+  if (s) p.push("status=" + encodeURIComponent(s));
+  if (q) p.push("q=" + encodeURIComponent(q));
+  if (k) p.push("kind=" + encodeURIComponent(k));
+  if (d && d !== "0") p.push("days=" + encodeURIComponent(d));
+  return p.join("&");
+}
+
+/* token: API 部署到非 loopback 时会要求 Bearer。页面本身不含数据所以不设闸,
+   但查询要带凭证 —— 放在 sessionStorage, 刷新不丢, 关标签页即清。 */
+function token(){ try { return sessionStorage.getItem("hxcp-token") || ""; } catch (e) { return ""; } }
+function api(path){
+  var h = {};
+  if (token()) h["authorization"] = "Bearer " + token();
+  return fetch(API + path, { headers: h }).then(function(r){
+    if (r.status === 401){
+      var t = prompt("该 API 需要 token (Bearer)。输入后存入本标签页:");
+      if (t){ try { sessionStorage.setItem("hxcp-token", t.trim()); } catch (e) {} return api(path); }
+    }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  });
+}
+
+function hhmmss(t){
+  var d = new Date(t * 1000);
+  function z(n){ return (n < 10 ? "0" : "") + n; }
+  return z(d.getHours()) + ":" + z(d.getMinutes()) + ":" + z(d.getSeconds());
+}
+/* 跨天视图里只显示时分秒看不出先后 (23:56 与 01:21 哪个在前?)。
+   不是今天就把日期一起带上 —— 抓包视图经常一次看几天。 */
+function clock(t){
+  var d = new Date(t * 1000), now = new Date();
+  function z(n){ return (n < 10 ? "0" : "") + n; }
+  var sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  var s = sameDay ? "" : z(d.getMonth() + 1) + "-" + z(d.getDate()) + " ";
+  return s + hhmmss(t);
+}
+function human(n){
+  n = Number(n || 0);
+  if (n < 1024) return n + "B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + "K";
+  return (n / 1048576).toFixed(2) + "M";
+}
+/* 体量单元格。响应体量不是每条都有 (Ping/上报类 encoded 就是 0), 那种情况若有请求体,
+   就显示请求体大小并用 ↑ 标注 —— 直接显示 0B 会让人以为这条请求什么都没带。 */
+function sizeCell(r){
+  var resp = Number(r.size || 0) || Number(r.encoded || 0);
+  if (resp) return human(resp);
+  if (r.post_data) return '<span style="color:var(--cyan)" title="请求体大小 (响应体量未上报)">↑' + human(r.post_data.length) + "</span>";
+  var ref = r.body_ref;
+  if (ref && ref.size) return '<span style="color:var(--cyan)" title="请求体大小 (响应体量未上报)">↑' + human(ref.size) + "</span>";
+  return "-";
+}
+
+function stCls(s){ s = Number(s || 0); if (!s) return "s0"; if (s < 300) return "s2"; if (s < 400) return "s3"; if (s < 500) return "s4"; return "s5"; }
+
+function badge(r){
+  var v = String(r.verdict || "");
+  if (r.kind === "hit" || v === "hit") return '<span class="badge hit">hit</span>';
+  if (v.indexOf("sensitive") >= 0 || v.indexOf("no_store") >= 0 || v.indexOf("set_cookie") >= 0)
+    return '<span class="badge sens">' + txt(v) + '</span>';
+  if (v.indexOf("skip") >= 0) return '<span class="badge skip">' + txt(v) + '</span>';
+  return '<span class="badge">' + txt(v || r.kind || "-") + "</span>";
+}
+
+function renderSpark(rows){
+  var el = $("spark"), lg = $("sparkLegend");
+  el.innerHTML = "";
+  if (!rows.length){ $("tMin").textContent = ""; $("tMax").textContent = ""; return; }
+  var ts = rows.map(function(r){ return Number(r.at || 0); });
+  var lo = Math.min.apply(null, ts), hi = Math.max.apply(null, ts);
+  var span = Math.max(hi - lo, 1);
+  var N = 120, buckets = new Array(N), errs = new Array(N);
+  for (var i = 0; i < N; i++){ buckets[i] = 0; errs[i] = 0; }
+  rows.forEach(function(r){
+    var i = Math.min(N - 1, Math.floor((Number(r.at || 0) - lo) / span * N));
+    buckets[i]++;
+    var s = Number(r.status || 0);
+    if (s >= 400) errs[i]++;
+  });
+  var mx = Math.max.apply(null, buckets) || 1;
+  for (var j = 0; j < N; j++){
+    var it = document.createElement("i");
+    it.style.height = Math.max(1, Math.round(buckets[j] / mx * 32)) + "px";
+    if (errs[j] > 0) it.className = "err";
+    it.title = buckets[j] + " 请求";
+    el.appendChild(it);
+  }
+  $("tMin").textContent = hhmmss(lo);
+  $("tMax").textContent = hhmmss(hi) + " · 跨度 " + Math.round(span) + "s";
+}
+
+/* 空态必须区分两件完全不同的事: "库里就没有记录" 与 "有记录但被过滤/时间窗挡掉了"。
+   混成一句会让人以为抓包没在工作 —— 而实际只是范围选了最近 1 天。 */
+function emptyHint(){
+  var s = state.stats || {}, f = s.flows || {}, days = $("fDays").value;
+  var filt = qs() ? "当前过滤: " + txt(qs()) + "。" : "";
+  if (f.records) {
+    return "没有匹配的请求。" + filt + "库里有 <b>" + f.records + "</b> 条记录, 最新 " +
+      txt(String(f.last || "-").split(" ")[0]) +
+      (days && days !== "0" ? ", 而范围只看到最近 " + days + " 天 —— 放宽范围再试。" : "。");
+  }
+  if (f.enabled) return "没有匹配的请求。" + filt + "记录器已开, 但这段范围里还没有落盘记录。";
+  return "没有匹配的请求。" + filt + "抓包记录默认不落盘: 引擎需带 <code>--record-flows</code> 启动。";
+}
+
+function renderRows(){
+  var tb = $("rows");
+  tb.innerHTML = "";
+  if (!state.rows.length){
+    tb.innerHTML = '<tr><td colspan="8" class="empty">' + emptyHint() + "</td></tr>";
+    return;
+  }
+  var prev = null;
+  state.rows.forEach(function(r, i){
+    var tr = document.createElement("tr");
+    if (state.sel && state.sel.url === r.url && state.sel.at === r.at) tr.className = "sel";
+    var gap = prev === null ? "" : "+" + ((Number(r.at || 0) - prev).toFixed(2)) + "s";
+    prev = Number(r.at || 0);
+    var u;
+    try { u = new URL(r.url); } catch (e) { u = { hostname: "", pathname: r.url }; }
+    tr.innerHTML =
+      '<td class="seq">' + (state.offset + i + 1) + "</td>" +
+      '<td class="t">' + clock(r.at) + "</td>" +
+      '<td class="gap">' + gap + "</td>" +
+      '<td class="method">' + txt(r.method || "GET") + "</td>" +
+      "<td><div>" + txt(u.hostname || "(non-http)") + '</div><div class="host">' + txt(u.pathname + (u.search || "")) + "</div></td>" +
+      '<td class="st ' + stCls(r.status) + '">' + (r.status || "-") + "</td>" +
+      '<td class="t">' + sizeCell(r) + "</td>" +
+      "<td>" + badge(r) + "</td>";
+    tr.onclick = function(){ select(r); };
+    tb.appendChild(tr);
+  });
+}
+
+function select(r){
+  state.sel = r; state.tab = "overview"; state.body = null;
+  renderRows(); renderDetail();
+}
+
+function renderDetail(){
+  var d = $("detail"), r = state.sel;
+  if (!r){ d.innerHTML = '<div class="empty">选一条请求看头与体</div>'; return; }
+  var h = "";
+  h += "<h2>" + txt(r.method || "GET") + " " + txt(r.url) + "</h2>";
+  h += '<div class="kv">' +
+    "<dt>时间</dt><dd>" + new Date(Number(r.at || 0) * 1000).toLocaleString() + "</dd>" +
+    "<dt>状态 / 类型</dt><dd>" + (r.status || "-") + " · " + txt(r.type || r.mime || "-") + "</dd>" +
+    "<dt>判定</dt><dd>" + txt(r.verdict || r.kind || "-") + "</dd>" +
+    "<dt>编码字节</dt><dd>" + (r.encoded == null ? "-" : r.encoded) + " · 体 " + (r.size || 0) + "</dd>" +
+    "<dt>resource</dt><dd>" + txt(r.resource_type || "-") + "</dd>" +
+    "</div>";
+
+  var po = r.post_data;
+  var ref = r.body_ref;
+  if (po && String(po).indexOf("...[truncated]") >= 0)
+    h += '<div class="warn">post_data 是 <b>8K 摘要</b> (被截断)。完整体在取证档里 —— ' +
+         (ref && ref.sha256 ? "按下面的引用取回。" : "这条记录没有引用: 该时段引擎未以 --forensic 启动。") + "</div>";
+  if (ref && ref.dropped)
+    h += '<div class="warn">取证档未收到这份体: ' + txt(ref.dropped) + "</div>";
+  if (ref && ref.sha256)
+    h += '<div class="note">完整体引用 <code>sha256=' + txt(ref.sha256.slice(0, 16)) + "…</code> 大小 " +
+         human(ref.size) + " <button id=btnBody>取回完整体</button></div>";
+
+  var tabs = [["overview", "概览"], ["req", "请求头"], ["resp", "响应头"], ["body", "请求体"]];
+  h += '<div class="tabs">';
+  tabs.forEach(function(t){
+    h += '<button class="' + (state.tab === t[0] ? "on" : "") + '" data-tab="' + t[0] + '">' + t[1] + "</button>";
+  });
+  h += "</div>";
+  d.innerHTML = h;
+
+  Array.prototype.forEach.call(d.querySelectorAll(".tabs button"), function(b){
+    b.onclick = function(){ state.tab = b.getAttribute("data-tab"); renderDetail(); };
+  });
+  if ($("btnBody")) $("btnBody").onclick = loadBody;
+
+  var pane = document.createElement("div");
+  if (state.tab === "req") pane.innerHTML = hdTable(r.req_headers, ["cookie", "authorization"]);
+  else if (state.tab === "resp") pane.innerHTML = hdTable(r.resp_headers, ["set-cookie"]);
+  else if (state.tab === "body") pane.innerHTML = bodyView(r);
+  else pane.innerHTML = overview(r);
+  d.appendChild(pane);
+}
+
+/* 头表: 敏感头标红 (它们是分析时最想看的, 不该埋在长表里看不见) */
+function hdTable(obj, hot){
+  obj = obj || {};
+  var keys = Object.keys(obj);
+  if (!keys.length) return '<div class="empty">无</div>';
+  var h = '<div class="hd">';
+  keys.forEach(function(k){
+    var isHot = hot.indexOf(k.toLowerCase()) >= 0;
+    h += '<div class="k' + (isHot ? " miss" : "") + '">' + txt(k) + "</div><div class=\"v\">" + txt(obj[k]) + "</div>";
+  });
+  return h + "</div>";
+}
+
+function overview(r){
+  var h = "";
+  var rh = Object.keys(r.req_headers || {}).length, sh = Object.keys(r.resp_headers || {}).length;
+  h += '<div class="note">请求头 ' + rh + " 条, 响应头 " + sh + " 条。要摸接口/找签名参数, 先看这两页; " +
+       "set-cookie 与 authorization 在表里标红。</div>";
+  h += "<pre>" + txt((r.method || "GET") + " " + (r.url || "")) + "</pre>";
+  return h;
+}
+
+function bodyView(r){
+  var h = "";
+  if (state.body){
+    h += '<div class="note">完整体 ' + state.body.size + "B, 已取回 " + state.body.returned + "B" +
+         (state.body.eof ? " (全部)" : " (可用「续读」继续)") + ' <button id=btnCopy>复制</button>' +
+         (state.body.eof ? "" : ' <button id=btnCont>续读</button>') + "</div>";
+    h += "<pre>" + txt(state.body.text) + "</pre>";
+    var extra = state.body.extra || "";
+    if (extra) h += "<pre>" + txt(extra) + "</pre>";
+    setTimeout(function(){
+      if ($("btnCopy")) $("btnCopy").onclick = function(){
+        navigator.clipboard.writeText((state.body.extra || "") + state.body.text);
+      };
+      if ($("btnCont")) $("btnCont").onclick = function(){ loadBody(state.body.offset + state.body.returned); };
+    }, 0);
+    return h;
+  }
+  if (r.post_data) h += "<pre>" + txt(r.post_data) + "</pre>";
+  else h += '<div class="empty">这条请求没有请求体 (GET 或未带 postData)</div>';
+  return h;
+}
+
+function loadBody(offset){
+  var r = state.sel;
+  if (!r || !r.body_ref || !r.body_ref.sha256) return;
+  var off = offset || 0;
+  api("/flow/body?sha256=" + encodeURIComponent(r.body_ref.sha256) + "&offset=" + off + "&limit=131072")
+    .then(function(b){
+      if (off > 0 && state.body){
+        state.body.text += b.text; state.body.returned += b.returned;
+        state.body.eof = b.eof; state.body.offset = b.offset; state.body.size = b.size;
+      } else {
+        state.body = { text: b.text, size: b.size, returned: b.returned, eof: b.eof, offset: b.offset };
+      }
+      renderDetail();
+    })
+    .catch(function(e){
+      state.body = { text: "取回失败: " + e.message, size: 0, returned: 0, eof: true, offset: 0 };
+      renderDetail();
+    });
+}
+
+function load(reset){
+  if (reset){ state.offset = 0; state.rows = []; state.sel = null; }
+  var url = "/flows?limit=" + state.pageSize + "&offset=" + state.offset + (qs() ? "&" + qs() : "");
+  api(url).then(function(d){
+    var rows = d.flows || [];
+    state.hasMore = rows.length >= state.pageSize;
+    state.rows = state.rows.concat(rows);
+    renderSpark(state.rows); renderRows(); renderDetail();
+    $("btnMore").style.display = state.hasMore ? "" : "none";
+    $("statLine").innerHTML = "本页 <b>" + rows.length + "</b> 条 · 已载 <b>" + state.rows.length + "</b> 条" +
+      (state.hasMore ? " (可能还有更多)" : " (到底了)");
+    return refreshStats();
+  }).catch(function(e){
+    $("rows").innerHTML = '<tr><td colspan="8" class="empty">查询失败: ' + txt(e.message) +
+      " —— API 在跑吗? 直连试试 <code>" + txt(API || "") + "/health</code></td></tr>";
+    $("statLine").textContent = "查询失败";
+  });
+}
+
+function refreshStats(){
+  return api("/stats").then(function(s){
+    state.stats = s;
+    var f = s.flows || {}, st = s.store || {}, fs = f.forensic || {};
+    var es = s.engine_state || "absent";
+    $("engineState").textContent = "引擎状态: " + es;
+    $("pulse").className = "pulse" + (es === "running" ? " on" : "");
+    $("rootPath").textContent = "flow 根: " + (f.root || "-");
+    /* 两个数各有出处, 不能混成一个标签:
+       records = 磁盘上真实存在的记录数 (引擎停了也算得准);
+       written = 记录器本次会话写入数 (只在引擎在跑时才有意义)。 */
+    var bits = [];
+    if (f.records != null) bits.push("库中 <b>" + f.records + "</b> 条");
+    if (f.written != null) bits.push("本次写入 <b>" + f.written + "</b>");
+    if (f.dropped) bits.push("丢弃 <b>" + f.dropped + "</b>");
+    bits.push("取证池 <b>" + (fs.enabled ? human(fs.bytes || 0) + "/" + human(fs.max_bytes || 0) + " (" + (fs.written || 0) + " 体)" : "关") + "</b>");
+    bits.push("缓存 <b>" + (st.entries || 0) + "</b> 条");
+    $("statLine").innerHTML = bits.join(" · ");
+    if (!f.enabled && !state.rows.length)
+      $("statLine").innerHTML += ' <span style="color:var(--amber)">· flow 未落盘</span>';
+  }).catch(function(){});
+}
+
+$("btnReload").onclick = function(){ load(true); };
+$("btnMore").onclick = function(){ state.offset += state.pageSize; load(false); };
+["fHost", "fStatus", "fQ"].forEach(function(id){
+  $(id).addEventListener("keydown", function(e){ if (e.key === "Enter") load(true); });
+});
+["fKind", "fDays"].forEach(function(id){ $(id).onchange = function(){ load(true); }; });
+
+var timer = null;
+$("auto").onchange = function(){
+  if (timer){ clearInterval(timer); timer = null; }
+  if ($("auto").checked) timer = setInterval(function(){ load(true); }, 5000);
+};
+
+load(true);
+</script>
+</body>
+</html>

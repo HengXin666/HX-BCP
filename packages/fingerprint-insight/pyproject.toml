@@ -1,0 +1,16 @@
+[project]
+name = "fp-insight"
+version = "0.1.0"
+description = "浏览器指纹探测工具: Hook 全部指纹 API, 实时回传站点采集行为 (调用参数/堆栈/调用次数) + 变量纠察"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "playwright>=1.49",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3.4"]
+
+[tool.uv]
+package = false

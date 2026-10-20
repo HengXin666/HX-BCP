@@ -1,0 +1,6 @@
+# 运行时工件一律不入库 (与 knowledge 里"浏览器 profile 工件不入库"同一条纪律):
+#   data/fp-insight.db  —— 观测证据库, 含被测站点的 cookie/存储键名, 每次会话都变
+#   data/sessions/*     —— 每会话的 Chromium profile + 截图, 体积大且含登录态
+data/
+.pytest_cache/
+__pycache__/

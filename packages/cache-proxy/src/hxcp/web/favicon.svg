@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- hxcp (HX-Capture-Proxy) 图标: 请求流被"捕获"进一个缓存层。
+
+       为什么是这三个元素 (功能特征优先):
+         ① 上下两条带箭头的流线 = 请求/响应双向流量。hxcp 是**代理**, 实物是过路的字节,
+            不是存储也不是计算。
+         ② 中间一个带边框的圆角方块 = 缓存层。它**不终结 TLS**(这是 hxcp 的核心约束),
+            所以方块画成"半透明+虚线边框"—— 表示它是旁路的观察/缓存面, 不是链路终点。
+         ③ 方块里的三条横线 = 已缓存的静态资源 (HTML/CSS/JS)。
+            用琥珀色, 与 hx-capture-proxy 自己的面板配色 (#e8a33d) 同源 ——
+            面板里就是这个色, 卡片图标与点进去之后的界面能对上。
+
+       与相邻项目的区分: upstream-proxy 画的是"出口路由", gh-pool/ps-pool 画的是"池",
+       这里画的是"穿过"—— 三条不同语义的形状, 缩到 32px 也一眼能分开。
+
+       尺寸约束: HX-WebX 卡片实测显示 38px。所以流线只留 2 条, 缓存方块里只留 3 条横线;
+       再多就糊成一团。 -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f2933"/>
+      <stop offset="1" stop-color="#0d1117"/>
+    </linearGradient>
+    <!-- ⚠️ gradientUnits="userSpaceOnUse" 是必需的, 不是可选修饰。
+         这三条横线是**纯水平**的 (只含 M/H 命令), 其包围盒高度为 0。
+         线性渐变默认用 objectBoundingBox 单位 —— 在退化包围盒 (宽或高为 0) 上
+         **整条描边都不渲染**, 不是颜色不对, 是完全不存在。
+         实测复现 (2026-10-06): 同一条 `M4 16 H60` 水平线,
+           objectBoundingBox -> 0 像素;  userSpaceOnUse -> 896 像素。
+         所以这里必须显式给坐标 (用 viewBox 的 0..64 空间)。 -->
+    <linearGradient id="flow" gradientUnits="userSpaceOnUse"
+                    x1="9" y1="0" x2="55" y2="0">
+      <stop offset="0" stop-color="#4ec9d4"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="amber" gradientUnits="userSpaceOnUse"
+                    x1="20" y1="0" x2="43" y2="0">
+      <stop offset="0" stop-color="#f0b453"/>
+      <stop offset="1" stop-color="#e8a33d"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+
+  <!-- ① 上行流线: 出站请求 -->
+  <path d="M9 21 H46" fill="none" stroke="url(#flow)" stroke-width="3"
+        stroke-linecap="round"/>
+  <path d="M42.5 16.5 L48.5 21 L42.5 25.5" fill="none" stroke="#22d3ee"
+        stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- ② 缓存层: 虚线边框 = 旁路观察面 (hxcp 零 TLS 终结, 不是链路终点) -->
+  <rect x="14" y="28" width="36" height="17" rx="4"
+        fill="#111c26" stroke="#e8a33d" stroke-width="1.8"
+        stroke-dasharray="3.5 2.5"/>
+  <!-- 缓存的静态资源: 三条横线, 长度不同 = 缓存条目不等大 -->
+  <path d="M20 34 H40" stroke="url(#amber)" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M20 39 H34" stroke="url(#amber)" stroke-width="2.4" stroke-linecap="round"
+        opacity="0.8"/>
+  <path d="M20 44 H43" stroke="url(#amber)" stroke-width="2.4" stroke-linecap="round"
+        opacity="0.6"/>
+
+  <!-- ③ 下行流线: 回程响应 (与上行同色系但更暗, 表示"同一股流量的另一半") -->
+  <path d="M55 52 H18" fill="none" stroke="url(#flow)" stroke-width="3"
+        stroke-linecap="round" opacity="0.85"/>
+  <path d="M21.5 47.5 L15.5 52 L21.5 56.5" fill="none" stroke="#4ec9d4"
+        stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+</svg>

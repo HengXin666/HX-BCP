@@ -1,0 +1,9 @@
+[project]
+name = "hx-fingerprint"
+version = "0.1.0"
+description = "指纹度量回路: 同一出口下并排测协议层 (TLS/HTTP2) 与浏览器层指纹, 消解伪装与出口两个变量"
+requires-python = ">=3.11"
+dependencies = ["curl_cffi>=0.11", "websocket-client>=1.8"]
+
+[tool.uv]
+package = false

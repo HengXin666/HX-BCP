@@ -1,0 +1,9 @@
+[project]
+name = "fp-audit"
+version = "0.1.0"
+description = "指纹环境质检红线: 对任意浏览器环境跑 creepjs/browserleaks/amiunique/pixelscan 一致性质检"
+requires-python = ">=3.11"
+dependencies = ["websocket-client>=1.8"]
+
+[tool.uv]
+package = false

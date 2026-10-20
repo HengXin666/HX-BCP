@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c2742"/>
+      <stop offset="1" stop-color="#0d1017"/>
+    </linearGradient>
+    <linearGradient id="fp" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fb8ff"/>
+      <stop offset="1" stop-color="#4f8cff"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5d9bff" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#3d6fd6" stop-opacity="0.95"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 圆角深色底 + 细描边 -->
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="url(#bg)" stroke="#2a3550" stroke-width="1"/>
+  <!-- 外圈光环（浏览器窗口意象） -->
+  <rect x="7" y="7" width="50" height="50" rx="10" fill="none" stroke="url(#ring)" stroke-width="1.4" opacity="0.5"/>
+
+  <!-- 指纹弧线组（Touch-ID 风格：中心圆 + 左/右/下 三面同心弧，顶部开口如指纹拱形） -->
+  <g fill="none" stroke="url(#fp)" stroke-linecap="round">
+    <circle cx="32" cy="31" r="5" stroke-width="3.2"/>
+    <!-- 右侧弧 -->
+    <path d="M32 19 a12 12 0 0 1 12 12" stroke-width="3"/>
+    <path d="M32 17 a14 14 0 0 1 14 14" stroke-width="2.3" opacity="0.85"/>
+    <path d="M32 14 a17 17 0 0 1 17 17" stroke-width="1.9" opacity="0.6"/>
+    <!-- 左侧弧 -->
+    <path d="M32 19 a12 12 0 0 0 -12 12" stroke-width="3"/>
+    <path d="M32 17 a14 14 0 0 0 -14 14" stroke-width="2.3" opacity="0.85"/>
+    <path d="M32 14 a17 17 0 0 0 -17 17" stroke-width="1.9" opacity="0.6"/>
+    <!-- 底部弧 -->
+    <path d="M20 31 a12 12 0 0 0 12 12" stroke-width="3"/>
+    <path d="M18 31 a14 14 0 0 0 14 14" stroke-width="2.3" opacity="0.85"/>
+    <path d="M15 31 a17 17 0 0 0 17 17" stroke-width="1.9" opacity="0.6"/>
+  </g>
+</svg>

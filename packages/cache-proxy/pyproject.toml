@@ -1,0 +1,32 @@
+[project]
+name = "hx-capture-proxy"
+version = "0.1.0"
+description = "HX-Capture-Proxy: 零终结 TLS 的静态缓存路由代理 + 抓包/回放, 提供 CLI / HTTP API / MCP"
+requires-python = ">=3.11"
+dependencies = [
+    "websocket-client>=1.8",
+]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.110", "uvicorn>=0.27"]
+mcp = ["mcp>=2.0"]
+
+# 开发依赖放 **dependency-group** 而不是 optional-extra:
+# uv 是精确同步, `uv sync --extra api` 会把没被指定的 optional-extra 卸掉 ——
+# 实测踩到 (2026-09-18): 加了 --extra api/mcp 之后 pytest 被卸载, `pytest` 直接
+# "No module named pytest"。default-groups 保证它始终在场。
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+hxcp = "hxcp.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hxcp"]
+
+[tool.uv]
+package = true
