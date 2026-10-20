@@ -1,0 +1,39 @@
+# 仅放工具配置 (ruff). 不声明 [project], 不影响现有依赖管理.
+# 注: "单文件 <= 300 行" 约束不在 ruff 这一层检查.
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = [
+    ".venv",
+    "node_modules",
+    "apps/console-web",
+    "dist",
+    "build",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501", # 行长交给 formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**" = ["B011"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true

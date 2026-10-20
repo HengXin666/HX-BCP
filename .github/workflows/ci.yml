@@ -1,32 +1,94 @@
-name: ci
+name: CI
 
 on:
-    push:
-        branches: [main]
-    pull_request:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+  PNPM_VERSION: "9"
 
 jobs:
-    python:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-            - uses: astral-sh/setup-uv@v4
-            - name: lane policy tests
-              run: cd packages/lane && uv run --with pytest pytest -q
-            - name: cache proxy tests
-              run: cd packages/cache-proxy && uv run --with pytest pytest -q || echo "cache-proxy tests not ready, recorded only"
-            - name: fingerprint audit importable
-              run: cd packages/fingerprint-audit && uv run python -c "import audit" || echo "audit script not ready"
+  python:
+    name: Python (ruff + checks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-    web:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-            - uses: pnpm/action-setup@v4
-              with:
-                  version: 9
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: 22
-            - name: install and typecheck
-              run: cd apps/console-web && pnpm install --no-frozen-lockfile && pnpm typecheck
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install "${PYTHON_VERSION}"
+
+      # 统一用 uv 管理环境: 有 requirements*.txt 就装进 .venv, 之后所有 python 步都走 uv run
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv venv --python "${PYTHON_VERSION}" .venv
+          shopt -s nullglob
+          for req in requirements.txt requirements-dev.txt; do
+            if [ -f "$req" ]; then
+              uv pip install --python .venv -r "$req"
+            fi
+          done
+
+      # 2) ruff 格式检查 + 静态检查 (配置见根目录 pyproject.toml [tool.ruff])
+      - name: Ruff format check
+        run: uv run --no-project --with ruff ruff format --check --diff .
+
+      - name: Ruff lint
+        run: uv run --no-project --with ruff ruff check --output-format=github .
+
+      # 1) 去掉 `|| echo ...` 兜底: 任一步非 0 退出即让 CI 失败
+      - name: Cache-proxy check
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-project python -m cache_proxy --self-check
+
+      - name: Fingerprint audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-project python -m fingerprint_audit --strict
+
+  console-web:
+    name: console-web (pnpm build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/console-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: apps/console-web/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # 3) apps/console-web 构建, 失败即 CI 失败
+      - name: Build
+        run: pnpm build
