@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """MCP 端到端: 真起 stdio server, 用真 MCP 客户端列出并调用工具。"""
-import asyncio, json, os, shutil, sys
+import asyncio, os, shutil, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 from hxcp.store import Store
 
