@@ -12,4 +12,6 @@ build/
 .pytest_cache/
 .bcp/
 
+*.tsbuildinfo
+
 packages/browser/data/account-packs/*.json
