@@ -9,7 +9,7 @@ export default defineConfig({
 		port: 8940,
 		host: "127.0.0.1",
 		proxy: {
-			"/api/browser": { target: "http://127.0.0.1:8325", changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/browser/, "") },
+			"/api/browser": { target: "http://127.0.0.1:8325", changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/browser/, "/api/v1") },
 			"/api/cache": { target: "http://127.0.0.1:8898", changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/cache/, "") },
 		},
 	},
