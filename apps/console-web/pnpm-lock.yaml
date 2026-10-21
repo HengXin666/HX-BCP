@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@hx/ui':
-        specifier: https://github.com/HengXin666/HX-UI/releases/download/v0.1.0/hx-ui-0.1.0.tgz
-        version: https://github.com/HengXin666/HX-UI/releases/download/v0.1.0/hx-ui-0.1.0.tgz(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(immer@11.1.21)(react-dom@19.3.1(react@19.3.1))(react-is@19.3.1)(react@19.3.1)(redux@5.0.1)(tailwindcss@4.3.3)
+        specifier: https://github.com/HengXin666/HX-UI/releases/download/v0.1.2/hx-ui-0.1.2.tgz
+        version: https://github.com/HengXin666/HX-UI/releases/download/v0.1.2/hx-ui-0.1.2.tgz(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(immer@11.1.21)(react-dom@19.3.1(react@19.3.1))(react-is@19.3.1)(react@19.3.1)(redux@5.0.1)(tailwindcss@4.3.3)
       react:
         specifier: ^19.0.0
         version: 19.3.1
@@ -302,9 +302,9 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@hx/ui@https://github.com/HengXin666/HX-UI/releases/download/v0.1.0/hx-ui-0.1.0.tgz':
-    resolution: {integrity: sha512-j/I2nnlvy9TuSeP0iQ3OAnZXSNQjwLs90xfLst6tTKit9ACOZvb/Ivs21uJRYdJC18WslvsJn/AfgyBW4YlDlg==, tarball: https://github.com/HengXin666/HX-UI/releases/download/v0.1.0/hx-ui-0.1.0.tgz}
-    version: 0.1.0
+  '@hx/ui@https://github.com/HengXin666/HX-UI/releases/download/v0.1.2/hx-ui-0.1.2.tgz':
+    resolution: {integrity: sha512-OjOtL0PPveQRv7U4x9FKQJC01MBsbxAq2M180N1xTouQsNhl0mzWWFwY59Yh80hhGCU0PluJ32VfOUQodC65nw==, tarball: https://github.com/HengXin666/HX-UI/releases/download/v0.1.2/hx-ui-0.1.2.tgz}
+    version: 0.1.2
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
@@ -2353,7 +2353,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@hx/ui@https://github.com/HengXin666/HX-UI/releases/download/v0.1.0/hx-ui-0.1.0.tgz(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(immer@11.1.21)(react-dom@19.3.1(react@19.3.1))(react-is@19.3.1)(react@19.3.1)(redux@5.0.1)(tailwindcss@4.3.3)':
+  '@hx/ui@https://github.com/HengXin666/HX-UI/releases/download/v0.1.2/hx-ui-0.1.2.tgz(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(immer@11.1.21)(react-dom@19.3.1(react@19.3.1))(react-is@19.3.1)(react@19.3.1)(redux@5.0.1)(tailwindcss@4.3.3)':
     dependencies:
       '@xyflow/react': 12.12.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(immer@11.1.21)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       class-variance-authority: 0.7.1
