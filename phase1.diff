@@ -1,0 +1,342 @@
+diff --git a/apps/console-web/src/lib/api.ts b/apps/console-web/src/lib/api.ts
+--- a/apps/console-web/src/lib/api.ts
++++ b/apps/console-web/src/lib/api.ts
+@@ -1,20 +1,42 @@
+ /** 控制台的后端访问: 浏览器环境 (8325) 与缓存代理 (8898) 两个只读视图. */
+ 
+-export type Env = { name: string; seed?: string; running?: boolean; proxy?: string };
++export type EnvProxy = { type?: string; host?: string; port?: number } | null;
++
++export type Env = {
++	id: string;
++	name: string;
++	group?: string;
++	platform?: string;
++	proxy?: EnvProxy;
++	fingerprint?: { browser?: string; kernel?: string } | null;
++	runtime?: Record<string, unknown> | null;
++	visible?: boolean;
++	visible_reason?: string;
++	open_count?: number;
++	pending_restart?: boolean;
++};
++
++export type EnvPage = { list: Env[]; total: number; page: number; page_size: number };
+ 
+ export type CacheStats = {
+-	hits?: number;
+-	misses?: number;
+-	bytesSaved?: number;
+-	entries?: number;
++	engine?: { hits?: number; misses?: number; passed?: number; errors?: number };
++	engine_state?: string;
++	store?: { entries?: number; bytes?: number; hits?: number; bytes_served?: number };
++	flows?: { records?: number };
++	events?: number;
+ };
+ 
+ export type Verdict = "green" | "yellow" | "red" | "unknown";
+ 
+-/** 统一结果: 服务未启动时返回 ok=false 而不是抛异常, 页面显示"未连接". */
++export type VerdictReport = { verdict: Verdict; checked: number; at: string; evidence: unknown[] };
++
++/** 统一结果: 服务未启动或业务失败时返回 ok=false 而不是抛异常, 页面显示"未连接". */
+ export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+ 
+-async function getJSON<T>(path: string, signal?: AbortSignal): Promise<Result<T>> {
++type Envelope<T> = { code?: number; msg?: string; data?: T };
++
++/** 读 JSON 原样返回, 只处理网络与 HTTP 状态. */
++async function getRaw<T>(path: string, signal?: AbortSignal): Promise<Result<T>> {
+ 	try {
+ 		const res = await fetch(path, { signal, headers: { Accept: "application/json" } });
+ 		if (!res.ok) return { ok: false, error: "HTTP " + res.status };
+@@ -24,19 +46,28 @@
+ 	}
+ }
+ 
+-/** 浏览器侧: 环境列表. */
++/** 读 8325 的信封 {code,msg,data}, code 不为 0 时返回 ok=false 与 msg. */
++async function getEnvelope<T>(path: string, signal?: AbortSignal): Promise<Result<T>> {
++	const r = await getRaw<Envelope<T>>(path, signal);
++	if (!r.ok) return r;
++	const body = r.data;
++	if (body.code !== 0) return { ok: false, error: body.msg ?? "code " + String(body.code) };
++	return { ok: true, data: body.data as T };
++}
++
++/** 浏览器侧: 环境列表, 取 data.list. */
+ export function listEnvs(signal?: AbortSignal): Promise<Result<Env[]>> {
+-	return getJSON<{ environments?: Env[] }>("/api/browser/environments", signal).then((r) =>
+-		r.ok ? { ok: true, data: r.data.environments ?? [] } : r,
++	return getEnvelope<EnvPage>("/api/browser/environments", signal).then((r) =>
++		r.ok ? { ok: true, data: r.data?.list ?? [] } : r,
+ 	);
+ }
+ 
+-/** 缓存代理侧: 命中与省流统计. */
++/** 缓存代理侧: 引擎与存储统计, 8898 不包信封. */
+ export function cacheStats(signal?: AbortSignal): Promise<Result<CacheStats>> {
+-	return getJSON<CacheStats>("/api/cache/stats", signal);
++	return getRaw<CacheStats>("/api/cache/stats", signal);
+ }
+ 
+-/** 指纹自检结论: 由 packages/fingerprint-audit 写入, 控制台只展示. */
+-export function fingerprintVerdict(signal?: AbortSignal): Promise<Result<{ verdict: Verdict; checked?: number }>> {
+-	return getJSON<{ verdict: Verdict; checked?: number }>("/api/browser/fingerprint/verdict", signal);
++/** 指纹自检结论: 读最新一份 fingerprint-audit 报告. */
++export function fingerprintVerdict(signal?: AbortSignal): Promise<Result<VerdictReport>> {
++	return getEnvelope<VerdictReport>("/api/browser/fingerprint/verdict", signal);
+ }
+diff --git a/apps/console-web/src/pages/CacheProxyPage.tsx b/apps/console-web/src/pages/CacheProxyPage.tsx
+--- a/apps/console-web/src/pages/CacheProxyPage.tsx
++++ b/apps/console-web/src/pages/CacheProxyPage.tsx
+@@ -1,32 +1,46 @@
+ import type { JSX } from "react";
+-import { Card, CardContent, EmptyState, ProgressMeter } from "@hx/ui";
++import { Badge, Card, CardContent, EmptyState, ProgressMeter } from "@hx/ui";
+ import { cacheStats } from "../lib/api";
+ import { usePoll } from "../lib/hooks";
+ 
+ const PERCENT = 100;
++const MB = 1024 * 1024;
+ 
+-/** 缓存代理统计: 命中率与省流字节数. */
++/** 字节转 MB, 保留 1 位小数. */
++function toMB(n: number | undefined): string {
++	return ((n ?? 0) / MB).toFixed(1);
++}
++
++/** 缓存代理统计: 引擎命中率, 存储累计服务字节与缓存体积, 条目与抓包记录数. */
+ export function CacheProxyPage(): JSX.Element {
+ 	const { result, loading } = usePoll(cacheStats);
+ 	if (loading && !result) return <EmptyState text="读取中" hint="正在连接缓存代理 (8898)" />;
+ 	if (!result?.ok) return <EmptyState text="未连接" hint={"缓存代理不可达: " + (result && "error" in result ? result.error : "")} />;
+ 
+ 	const s = result.data;
+-	const hits = s.hits ?? 0;
+-	const total = hits + (s.misses ?? 0);
++	const hits = s.engine?.hits ?? 0;
++	const misses = s.engine?.misses ?? 0;
++	const total = hits + misses;
+ 	const rate = total === 0 ? 0 : Math.round((hits / total) * PERCENT);
+-	const savedMB = ((s.bytesSaved ?? 0) / (1024 * 1024)).toFixed(1);
++	const state = s.engine_state ?? "unknown";
+ 
+ 	return (
+ 		<Card variant="muted">
+ 			<CardContent className="flex flex-col gap-3 pt-3">
+-				<ProgressMeter label="缓存命中率" value={rate} max={PERCENT} />
+-				<div className="flex gap-6 text-[13px]">
++				<div className="flex items-center gap-3">
++					<Badge variant={state === "running" ? "success" : "secondary"}>{state}</Badge>
++					<span className="text-[12px] text-muted-foreground">引擎状态</span>
++				</div>
++				<ProgressMeter label="缓存命中率 (engine.hits / (hits + misses))" value={rate} max={PERCENT} />
++				<div className="flex flex-wrap gap-6 text-[13px]">
+ 					<span>命中 <b className="tabular-nums">{hits}</b></span>
+-					<span>未命中 <b className="tabular-nums">{s.misses ?? 0}</b></span>
+-					<span>省流 <b className="tabular-nums">{savedMB}</b> MB</span>
+-					<span>条目 <b className="tabular-nums">{s.entries ?? 0}</b></span>
++					<span>未命中 <b className="tabular-nums">{misses}</b></span>
++					<span>累计服务字节 <b className="tabular-nums">{toMB(s.store?.bytes_served)}</b> MB</span>
++					<span>缓存体积 <b className="tabular-nums">{toMB(s.store?.bytes)}</b> MB</span>
++					<span>条目 <b className="tabular-nums">{s.store?.entries ?? 0}</b></span>
++					<span>抓包记录 <b className="tabular-nums">{s.flows?.records ?? 0}</b></span>
+ 				</div>
++				<div className="text-[12px] text-muted-foreground">累计服务字节是缓存累计返回给浏览器的字节数, 不等于节省字节.</div>
+ 			</CardContent>
+ 		</Card>
+ 	);
+diff --git a/apps/console-web/src/pages/EnvironmentsPage.tsx b/apps/console-web/src/pages/EnvironmentsPage.tsx
+--- a/apps/console-web/src/pages/EnvironmentsPage.tsx
++++ b/apps/console-web/src/pages/EnvironmentsPage.tsx
+@@ -1,9 +1,16 @@
+ import type { JSX } from "react";
+ import { Badge, EmptyState } from "@hx/ui";
+ import { listEnvs } from "../lib/api";
++import type { EnvProxy } from "../lib/api";
+ import { usePoll } from "../lib/hooks";
+ 
+-/** 浏览器环境列表: 显示名字, 指纹种子, 当前代理与运行态. */
++/** 代理显示为 type://host:port, 没有 host 时为直连. */
++function proxyText(p: EnvProxy | undefined): string {
++	if (!p || !p.host) return "直连";
++	return (p.type ?? "http") + "://" + p.host + (p.port ? ":" + String(p.port) : "");
++}
++
++/** 浏览器环境列表: 显示名字, 分组, 平台, 指纹内核, 代理, 运行态与可见性. */
+ export function EnvironmentsPage(): JSX.Element {
+ 	const { result, loading } = usePoll(listEnvs);
+ 
+@@ -11,18 +18,26 @@
+ 	if (!result?.ok) return <EmptyState text="未连接" hint={"浏览器服务不可达: " + (result && "error" in result ? result.error : "")} />;
+ 
+ 	const envs = result.data;
+-	if (envs.length === 0) return <EmptyState text="还没有环境" hint="用 hxb new --name demo --seed demo-1 创建一个" />;
++	if (envs.length === 0) return <EmptyState text="还没有环境" hint="用 hxb new --name demo 创建一个" />;
+ 
+ 	return (
+ 		<div className="flex flex-col gap-2">
+-			{envs.map((env) => (
+-				<div key={env.name} className="flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2">
+-					<span className="font-mono text-[13px]">{env.name}</span>
+-					<Badge variant={env.running ? "success" : "secondary"}>{env.running ? "运行中" : "未启动"}</Badge>
+-					<span className="text-[12px] text-muted-foreground">seed {env.seed ?? "-"}</span>
+-					<span className="ml-auto font-mono text-[12px] text-muted-foreground">{env.proxy ?? "直连"}</span>
+-				</div>
+-			))}
++			{envs.map((env) => {
++				const running = env.runtime != null;
++				return (
++					<div key={env.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 px-3 py-2">
++						<span className="font-mono text-[13px]">{env.name}</span>
++						<Badge variant={running ? "success" : "secondary"}>{running ? "运行中" : "未启动"}</Badge>
++						<Badge variant={env.visible ? "default" : "secondary"}>{env.visible ? "可见" : "不可见"}</Badge>
++						<span className="text-[12px] text-muted-foreground">{env.visible_reason ?? "-"}</span>
++						<span className="text-[12px] text-muted-foreground">分组 {env.group || "-"}</span>
++						<span className="text-[12px] text-muted-foreground">平台 {env.platform || "-"}</span>
++						<span className="text-[12px] text-muted-foreground">指纹 {env.fingerprint?.browser ?? "-"}</span>
++						<span className="text-[12px] text-muted-foreground">打开 {env.open_count ?? 0} 次</span>
++						<span className="ml-auto font-mono text-[12px] text-muted-foreground">{proxyText(env.proxy)}</span>
++					</div>
++				);
++			})}
+ 		</div>
+ 	);
+ }
+diff --git a/apps/console-web/src/pages/FingerprintPage.tsx b/apps/console-web/src/pages/FingerprintPage.tsx
+--- a/apps/console-web/src/pages/FingerprintPage.tsx
++++ b/apps/console-web/src/pages/FingerprintPage.tsx
+@@ -17,13 +17,14 @@
+ 	const { result, loading } = usePoll(fingerprintVerdict);
+ 	if (loading && !result) return <EmptyState text="读取中" hint="正在读取自检结论" />;
+ 
+-	const data = result?.ok ? result.data : { verdict: "unknown" as const };
++	const data = result?.ok ? result.data : { verdict: "unknown" as const, checked: 0, at: "" };
+ 	return (
+ 		<Card variant="muted">
+ 			<CardContent className="flex flex-col gap-3 pt-3">
+ 				<div className="flex items-center gap-3">
+ 					<Badge variant={TONE[data.verdict] ?? "secondary"}>{LABEL[data.verdict] ?? data.verdict}</Badge>
+ 					<span className="text-[12px] text-muted-foreground">检查项 {data.checked ?? 0}</span>
++					<span className="text-[12px] text-muted-foreground">时间 {data.at || "-"}</span>
+ 				</div>
+ 				<pre className="overflow-x-auto rounded-md bg-background/60 p-2 font-mono text-[12px]">cd packages/fingerprint-audit && uv run audit.py --launch headless --json</pre>
+ 				<div className="text-[12px] text-muted-foreground">退出码 0 绿 / 1 黄 / 2 红, 流水线直接用它当闸门.</div>
+diff --git a/apps/console-web/vite.config.ts b/apps/console-web/vite.config.ts
+--- a/apps/console-web/vite.config.ts
++++ b/apps/console-web/vite.config.ts
+@@ -9,7 +9,7 @@
+ 		port: 8940,
+ 		host: "127.0.0.1",
+ 		proxy: {
+-			"/api/browser": { target: "http://127.0.0.1:8325", changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/browser/, "") },
++			"/api/browser": { target: "http://127.0.0.1:8325", changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/browser/, "/api/v1") },
+ 			"/api/cache": { target: "http://127.0.0.1:8898", changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/cache/, "") },
+ 		},
+ 	},
+Binary files HX-BCP-0b37105/packages/browser/src/hx_browser/__pycache__/api_fingerprint.cpython-312.pyc and new/packages/browser/src/hx_browser/__pycache__/api_fingerprint.cpython-312.pyc differ
+diff --git a/packages/browser/src/hx_browser/api.py b/packages/browser/src/hx_browser/api.py
+--- a/packages/browser/src/hx_browser/api.py
++++ b/packages/browser/src/hx_browser/api.py
+@@ -13,7 +13,7 @@
+ from pydantic import BaseModel
+ 
+ from . import account_pack as ap
+-from . import api_hxcp, api_live, api_profiles, cdp, hxcp_link, mcp_http, profile_ops, relay
++from . import api_fingerprint, api_hxcp, api_live, api_profiles, cdp, hxcp_link, mcp_http, profile_ops, relay
+ from .browser import (BrowserManager, RUNTIME, cleanup_orphans, get_runtime,
+                       load_persisted_runtime, parse_cookies, scan_orphans,
+                       wait_window_verdict)
+@@ -742,6 +742,7 @@
+     app.include_router(api_profiles.build_router(start_env, manager))  # 副本管理/检测修复/回收站
+     app.include_router(api_live.build_router())  # 实时预览: 在跑副本列表 + WS 帧流/远程操作
+     app.include_router(api_hxcp.router)  # hxcp 缓存代理挂载
++    app.include_router(api_fingerprint.router)  # 指纹自检结论
+     mcp_http.mount(app)  # MCP Streamable HTTP: POST /mcp (stdio 版见 mcp_server.py)
+ 
+     @app.middleware("http")
+diff --git a/packages/browser/src/hx_browser/api_fingerprint.py b/packages/browser/src/hx_browser/api_fingerprint.py
+new file mode 100644
+--- /dev/null
++++ b/packages/browser/src/hx_browser/api_fingerprint.py
+@@ -0,0 +1,78 @@
++"""指纹自检结论端点
++
++GET /api/v1/fingerprint/verdict
++"""
++
++from __future__ import annotations
++
++import json
++import logging
++import os
++from pathlib import Path
++
++from fastapi import APIRouter
++from fastapi.responses import JSONResponse
++
++log = logging.getLogger("hx_browser.api_fingerprint")
++
++router = APIRouter(prefix="/api/v1")
++
++LEVELS = ("green", "yellow", "red")
++
++
++def ok(data=None, msg: str = "success") -> JSONResponse:
++    return JSONResponse({"code": 0, "msg": msg, "data": data})
++
++
++def reports_dir() -> Path:
++    """fingerprint-audit 报告目录, 可用 HX_FP_REPORTS_DIR 覆盖."""
++    env = os.environ.get("HX_FP_REPORTS_DIR", "")
++    if env:
++        return Path(env)
++    return Path(__file__).resolve().parents[3] / "fingerprint-audit" / "reports"
++
++
++def unknown(at: str = "") -> dict:
++    """没有可用报告时的结论."""
++    return {"verdict": "unknown", "checked": 0, "at": at, "evidence": []}
++
++
++def latest_report(root: Path) -> Path | None:
++    """按文件名排序取最新一份 json 报告, 没有时返回 None."""
++    if not root.is_dir():
++        return None
++    files = sorted(p for p in root.iterdir() if p.is_file() and p.suffix == ".json")
++    return files[-1] if files else None
++
++
++def summarize(rep: dict) -> dict:
++    """报告 -> {verdict, checked, at, evidence}, verdict 取 verdict.level."""
++    v = rep.get("verdict") or {}
++    level = str(v.get("level") or "unknown")
++    results = rep.get("results") or {}
++    return {
++        "verdict": level if level in LEVELS else "unknown",
++        "checked": len(results) if isinstance(results, dict) else 0,
++        "at": str(rep.get("at") or ""),
++        "evidence": list(v.get("findings") or []),
++    }
++
++
++def read_verdict(root: Path) -> dict:
++    """读最新报告并汇总, 任何读取或解析失败都返回 unknown."""
++    try:
++        path = latest_report(root)
++        if path is None:
++            return unknown()
++        rep = json.loads(path.read_text(encoding="utf-8"))
++        if not isinstance(rep, dict):
++            return unknown()
++        return summarize(rep)
++    except Exception as e:  # noqa: BLE001
++        log.warning("读指纹自检报告失败: %s", e)
++        return unknown()
++
++
++@router.get("/fingerprint/verdict")
++async def fingerprint_verdict():
++    return ok(read_verdict(reports_dir()))
