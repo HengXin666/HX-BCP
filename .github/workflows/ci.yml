@@ -5,21 +5,45 @@ on:
         branches: [main]
     pull_request:
 
+permissions:
+    contents: read
+
+concurrency:
+    group: ci-${{ github.ref }}
+    cancel-in-progress: true
+
 jobs:
-    python:
+    lane:
+        name: 通道判定 (lane)
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
             - uses: astral-sh/setup-uv@v4
-            - name: lane policy tests
-              run: cd packages/lane && uv run --with pytest pytest -q
-            - name: cache proxy tests
-              run: cd packages/cache-proxy && uv run --with pytest pytest -q || echo "cache-proxy tests not ready, recorded only"
-            - name: fingerprint audit importable
-              run: cd packages/fingerprint-audit && uv run python -c "import audit" || echo "audit script not ready"
+            - name: pytest
+              working-directory: packages/lane
+              run: uv run --with pytest pytest -q
 
-    web:
+    python:
+        name: Python 静态检查
         runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: astral-sh/setup-uv@v4
+            - name: ruff lint
+              run: uv run --no-project --with ruff ruff check .
+            - name: 缓存代理可导入
+              working-directory: packages/cache-proxy
+              run: uv run python -c "import hxcp.cli"
+            - name: 指纹自检可导入
+              working-directory: packages/fingerprint-audit
+              run: uv run python -c "import audit"
+
+    console:
+        name: 控制台构建
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: apps/console-web
         steps:
             - uses: actions/checkout@v4
             - uses: pnpm/action-setup@v4
@@ -28,5 +52,11 @@ jobs:
             - uses: actions/setup-node@v4
               with:
                   node-version: 22
-            - name: install and typecheck
-              run: cd apps/console-web && pnpm install --no-frozen-lockfile && pnpm typecheck
+                  cache: pnpm
+                  cache-dependency-path: apps/console-web/pnpm-lock.yaml
+            - name: install
+              run: pnpm install --frozen-lockfile
+            - name: typecheck
+              run: pnpm typecheck
+            - name: build
+              run: pnpm build

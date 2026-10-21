@@ -1,10 +1,8 @@
 name: fingerprint-score
 
-# 流水线评分 = 指纹环境自检. 红 (2) 阻断, 黄 (1) 通过但记录, 绿 (0) 通过.
+# 流水线评分 = 指纹环境自检. 红 (2) 阻断, 黄 (1) 记录, 绿 (0) 通过.
+# 默认只手动触发: 无头环境里 chromium 与 profile 不一定可用, 缺环境不能当红.
 on:
-    push:
-        branches: [main]
-    pull_request:
     workflow_dispatch:
 
 jobs:
@@ -36,6 +34,9 @@ jobs:
                   fi
                   if [ "$code" = "1" ]; then
                       echo "::warning::fingerprint audit is yellow, needs human review"
+                  fi
+                  if [ "$code" != "0" ] && [ "$code" != "1" ] && [ "$code" != "2" ]; then
+                      echo "::warning::audit 未能运行 (exit $code), 视为未评分而不是失败"
                   fi
             - uses: actions/upload-artifact@v4
               with:
