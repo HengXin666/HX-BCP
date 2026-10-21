@@ -11,3 +11,5 @@ build/
 .ruff_cache/
 .pytest_cache/
 .bcp/
+
+packages/browser/data/account-packs/*.json
