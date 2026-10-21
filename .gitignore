@@ -13,3 +13,5 @@ build/
 .bcp/
 
 *.tsbuildinfo
+
+packages/browser/data/account-packs/*.json

@@ -1,0 +1,51 @@
+{
+ "version": 1,
+ "platform": "github",
+ "exported_at": 0,
+ "fingerprint": {
+  "browser": "sun",
+  "kernel_version": "system",
+  "os": "Windows",
+  "device_type": "desktop",
+  "user_agent": "PLACEHOLDER",
+  "language": "en-US",
+  "timezone": "UTC",
+  "resolution": "1280x800",
+  "color_depth": 24,
+  "hardware_concurrency": 4,
+  "device_memory": 8,
+  "webgl_vendor": "PLACEHOLDER",
+  "webgl_renderer": "PLACEHOLDER"
+ },
+ "cookies": [
+  {
+   "name": "user_session",
+   "value": "PLACEHOLDER",
+   "domain": ".example.com",
+   "path": "/",
+   "expires": 0,
+   "httpOnly": true,
+   "secure": true,
+   "sameSite": "Lax"
+  },
+  {
+   "name": "logged_in",
+   "value": "PLACEHOLDER",
+   "domain": ".example.com",
+   "path": "/",
+   "expires": 0,
+   "httpOnly": false,
+   "secure": true,
+   "sameSite": "Lax"
+  }
+ ],
+ "meta": {
+  "logged_in": "ok",
+  "key_cookies": [
+   "user_session"
+  ],
+  "total_cookies": 2,
+  "pack_cookies": 2,
+  "size_bytes": 0
+ }
+}
