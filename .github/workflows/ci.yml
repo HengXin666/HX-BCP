@@ -13,7 +13,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # 合并时把这两行换成原 ci.yml 中对应步骤的真实命令 (只去掉 `|| echo ...` 兜底, 不加 uv run 前缀, 下面步骤会统一加)
+  CACHE_PROXY_CMD: "python -m cache_proxy --self-check"
+  FINGERPRINT_AUDIT_CMD: "python -m fingerprint_audit --strict"
   PYTHON_VERSION: "3.11"
+  RUFF_VERSION: "0.17.1"
   NODE_VERSION: "20"
   PNPM_VERSION: "9"
 
@@ -29,8 +33,17 @@ jobs:
         with:
           enable-cache: true
 
+      # 仓库根有 .python-version 时以它为准, 否则用 PYTHON_VERSION
       - name: Set up Python
-        run: uv python install "${PYTHON_VERSION}"
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f .python-version ]; then
+            echo "PYTHON_VERSION=$(tr -d '[:space:]' < .python-version)" >> "$GITHUB_ENV"
+            uv python install "$(tr -d '[:space:]' < .python-version)"
+          else
+            uv python install "${PYTHON_VERSION}"
+          fi
 
       # 统一用 uv 管理环境: 有 requirements*.txt 就装进 .venv, 之后所有 python 步都走 uv run
       - name: Install dependencies
@@ -47,23 +60,25 @@ jobs:
 
       # 2) ruff 格式检查 + 静态检查 (配置见根目录 pyproject.toml [tool.ruff])
       - name: Ruff format check
-        run: uv run --no-project --with ruff ruff format --check --diff .
+        run: uv run --no-project --with "ruff==${RUFF_VERSION}" ruff format --check --diff .
 
       - name: Ruff lint
-        run: uv run --no-project --with ruff ruff check --output-format=github .
+        run: uv run --no-project --with "ruff==${RUFF_VERSION}" ruff check --output-format=github .
 
       # 1) 去掉 `|| echo ...` 兜底: 任一步非 0 退出即让 CI 失败
       - name: Cache-proxy check
         shell: bash
         run: |
           set -euo pipefail
-          uv run --no-project python -m cache_proxy --self-check
+          # shellcheck disable=SC2086
+          uv run --no-project ${CACHE_PROXY_CMD}
 
       - name: Fingerprint audit
         shell: bash
         run: |
           set -euo pipefail
-          uv run --no-project python -m fingerprint_audit --strict
+          # shellcheck disable=SC2086
+          uv run --no-project ${FINGERPRINT_AUDIT_CMD}
 
   console-web:
     name: console-web (pnpm build)
