@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import account_pack as ap
-from . import api_hxcp, api_live, api_profiles, cdp, hxcp_link, mcp_http, profile_ops, relay
+from . import api_fingerprint, api_hxcp, api_live, api_profiles, cdp, hxcp_link, mcp_http, profile_ops, relay
 from .browser import (BrowserManager, RUNTIME, cleanup_orphans, get_runtime,
                       load_persisted_runtime, parse_cookies, scan_orphans,
                       wait_window_verdict)
@@ -742,6 +742,7 @@ def create_app() -> FastAPI:
     app.include_router(api_profiles.build_router(start_env, manager))  # 副本管理/检测修复/回收站
     app.include_router(api_live.build_router())  # 实时预览: 在跑副本列表 + WS 帧流/远程操作
     app.include_router(api_hxcp.router)  # hxcp 缓存代理挂载
+    app.include_router(api_fingerprint.router)  # 指纹自检结论
     mcp_http.mount(app)  # MCP Streamable HTTP: POST /mcp (stdio 版见 mcp_server.py)
 
     @app.middleware("http")
