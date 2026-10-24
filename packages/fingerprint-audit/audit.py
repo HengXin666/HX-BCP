@@ -130,8 +130,10 @@ def save(rep, label):
     tag = (ts + "-" + label) if label else ts
     rp = os.path.join(HERE, "reports", tag + ".json")
     ep = os.path.join(HERE, "evidence", tag + ".txt")
+    os.makedirs(os.path.dirname(rp), exist_ok=True)
     with open(rp, "w", encoding="utf-8") as f:
         json.dump(rep, f, ensure_ascii=False, indent=2)
+    os.makedirs(os.path.dirname(ep), exist_ok=True)
     with open(ep, "w", encoding="utf-8") as f:
         f.write("# fp-audit evidence  " + rep["at"] + "  endpoint=" + rep["endpoint"] + "\n\n")
         for name, r in rep["results"].items():
