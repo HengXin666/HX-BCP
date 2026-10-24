@@ -34,7 +34,7 @@ jobs:
               with:
                   node-version: 22
             - name: engine tests
-              run: node --experimental-strip-types --test packages/browser/gate/engine.test.ts packages/browser/gate/claude-env.test.ts
+              run: node --experimental-strip-types --test packages/browser/tests/noise.test.mjs packages/browser/gate/engine.test.ts packages/browser/gate/claude-env.test.ts
 
     audit:
         name: 指纹自检 (audit)

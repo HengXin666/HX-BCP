@@ -211,23 +211,8 @@ _CONTENT_JS = r"""
     } catch (e) {}
   }
 
-  // ---------- Canvas 噪声 ----------
-  if (FP.canvas_noise) {
-    try {
-      const _gd = CanvasRenderingContext2D.prototype.getImageData;
-      CanvasRenderingContext2D.prototype.getImageData = function() {
-        const img = _gd.apply(this, arguments);
-        const d = img.data;
-        for (let i = 0; i < d.length; i += 97) d[i] = (d[i] + 1) % 255;
-        return img;
-      };
-      const _td = HTMLCanvasElement.prototype.toDataURL;
-      HTMLCanvasElement.prototype.toDataURL = function() {
-        const url = _td.apply(this, arguments);
-        return url.length > 1000 ? url.slice(0, -8) + '==' : url;
-      };
-    } catch (e) {}
-  }
+  // ---------- Canvas / measureText / WebGL readPixels / Audio 噪声: 按副本 seed, 见 noise.js ----------
+  %NOISE_JS%
 
   // ---------- WebGL ----------
   try {
@@ -236,9 +221,6 @@ _CONTENT_JS = r"""
       if (p === 37445 && FP.webgl_vendor) return FP.webgl_vendor;
       if (p === 37446 && FP.webgl_renderer) return FP.webgl_renderer;
       const v = _getParam.call(this, p);
-      if (FP.webgl_noise && typeof v === 'number' && Number.isFinite(v) && p !== 34076 && p !== 34024 && p !== 3386) {
-        return v + 0.0001;
-      }
       return v;
     };
     const _getParam2 = WebGL2RenderingContext.prototype.getParameter;
@@ -246,24 +228,9 @@ _CONTENT_JS = r"""
       if (p === 37445 && FP.webgl_vendor) return FP.webgl_vendor;
       if (p === 37446 && FP.webgl_renderer) return FP.webgl_renderer;
       const v = _getParam2.call(this, p);
-      if (FP.webgl_noise && typeof v === 'number' && Number.isFinite(v) && p !== 34076 && p !== 34024 && p !== 3386) {
-        return v + 0.0001;
-      }
       return v;
     };
   } catch (e) {}
-
-  // ---------- Audio 噪声 ----------
-  if (FP.audio_noise) {
-    try {
-      const orig = AudioBuffer.prototype.getChannelData;
-      AudioBuffer.prototype.getChannelData = function(c) {
-        const data = orig.call(this, c);
-        if (data.length > 100) data[data.length - 1] = data[data.length - 1] + 0.00001;
-        return data;
-      };
-    } catch (e) {}
-  }
 
   // ---------- WebRTC 出口 IP 遮蔽 (2026-10-10 重写) ----------
   // 旧实现只对 SDP 做字符串替换, 两个致命问题:
@@ -353,6 +320,14 @@ _CONTENT_JS = r"""
 """
 
 # ---------------- 随机指纹生成 ----------------
+NOISE_JS_FILE = Path(__file__).with_name("noise.js")
+
+
+def _noise_js() -> str:
+    """按副本 seed 的 Canvas / measureText / WebGL readPixels / Audio 噪声 (源码见 noise.js)。"""
+    return ";(%s)(FP, window);" % NOISE_JS_FILE.read_text("utf-8").strip()
+
+
 def gen_random_fingerprint(browser: str = "sun", os_name: str | None = None, country: str | None = None) -> dict:
     """按平台随机生成一套自洽指纹。"""
     os_name = os_name or random.choice(OS_POOL)
@@ -514,7 +489,11 @@ def build_fingerprint_extension(env: Environment, profile_dir: Path, dark: bool 
         ],
     }
     (ext_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), "utf-8")
-    (ext_dir / "content.js").write_text(_CONTENT_JS.replace("%FP_JSON%", json.dumps(fp_json)), "utf-8")
+    from .cloak import seed_for  # 局部导入, 避免循环依赖
+
+    fp_json["noise_seed"] = seed_for(env.id, profile_dir)
+    content = _CONTENT_JS.replace("%NOISE_JS%", _noise_js()).replace("%FP_JSON%", json.dumps(fp_json))
+    (ext_dir / "content.js").write_text(content, "utf-8")
     return ext_dir
 
 
