@@ -17,6 +17,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -38,11 +40,73 @@ FINGERPRINT = {
     "webgl_noise": True,
     "audio_noise": True,
 }
-PREFS = {"font_isolation": "strict"}
+PREFS = {
+    "font_isolation": "strict",
+    # inherit 只传 --lang, Linux 上的 Chrome 不认, 网页仍读到电脑的 zh-CN (实测 +24 分);
+    # custom 才会同步 LANG/LANGUAGE 与 intl.accept_languages, 见 launch_hooks.process_env
+    "language_mode": "custom",
+    "languages": ["en-US", "en"],
+}
+UA_TEMPLATE = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/%s.0.0.0 Safari/537.36"
+)
+CHROME_FALLBACK = ("google-chrome-stable", "google-chrome", "chromium", "chromium-browser")
 
 
 def local(port: int) -> str:
     return "%s://127.0.0.1:%d" % ("http", port)
+
+
+def chrome_ua(version_text: str) -> str:
+    """由 chrome --version 拼一个非 Headless 的 UA; 认不出主版本就返回空串, 不瞎编。"""
+    m = re.search(r"(\d+)\.\d+", version_text or "")
+    return UA_TEMPLATE % m.group(1) if m else ""
+
+
+def detect_ua(api: str) -> str:
+    """headless 默认 UA 带 HeadlessChrome, Sannysoft / CreepJS 一眼认出; 换成同版本的正常 UA。"""
+    exe = ""
+    try:
+        settings = call(api, "GET", "/settings") or {}
+        exe = settings.get("chromium_path") or (settings.get("settings") or {}).get("chromium_path") or ""
+    except (OSError, ValueError, RuntimeError, AttributeError):
+        pass
+    exe = exe or next((p for p in map(shutil.which, CHROME_FALLBACK) if p), "")
+    if not exe:
+        return ""
+    try:
+        res = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=20, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return chrome_ua(res.stdout)
+
+
+def profile_fingerprint(api: str) -> dict:
+    fp = dict(FINGERPRINT)
+    ua = detect_ua(api)
+    if ua:
+        fp["user_agent"] = ua
+    return fp
+
+
+def stop_group(pid: int, grace: float = 10) -> None:
+    """SIGTERM 后等进程组退干净, 超时再 SIGKILL (uvicorn 优雅退出可能卡在浏览器子进程上)。"""
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except OSError:
+        return
+    end = time.time() + grace
+    while time.time() < end:
+        try:
+            os.killpg(pid, 0)
+        except OSError:
+            return
+        time.sleep(0.5)
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except OSError:
+        pass
 
 
 def call(api: str, method: str, path: str, body: dict | None = None, timeout: float = 120):
@@ -65,6 +129,20 @@ def wait_api(api: str, seconds: float) -> bool:
             return True
         except (OSError, ValueError, RuntimeError):
             time.sleep(1)
+    return False
+
+
+def wait_cdp(cdp: str, seconds: float) -> bool:
+    """start 返回时 DevTools 端口可能还没就绪; 探针立刻连会卡在 ws preparing (实测)。"""
+    end = time.time() + seconds
+    while time.time() < end:
+        try:
+            with urllib.request.urlopen(cdp + "/json/version", timeout=3) as resp:
+                if json.loads(resp.read().decode() or "{}").get("webSocketDebuggerUrl"):
+                    return True
+        except (OSError, ValueError):
+            pass
+        time.sleep(0.5)
     return False
 
 
@@ -101,10 +179,15 @@ def up(args: argparse.Namespace) -> int:
         print("hx-browser API 没有起来: %s" % api, file=sys.stderr)
         return UNSCORED
     try:
+        body = {"name": ENV_NAME, "fingerprint": profile_fingerprint(api), "prefs": PREFS}
         env_id = find_env(api)
-        if not env_id:
-            created = call(api, "POST", "/environments", {"name": ENV_NAME, "fingerprint": FINGERPRINT, "prefs": PREFS})
-            env_id = created["id"]
+        if env_id:
+            try:  # 按名复用时把配置刷成本脚本的版本, 免得旧副本带旧设置被评分
+                call(api, "PUT", "/environments/%s" % env_id, body)
+            except (OSError, ValueError, RuntimeError) as exc:
+                print("刷新已有副本配置失败, 沿用旧配置: %s" % exc, file=sys.stderr)
+        else:
+            env_id = call(api, "POST", "/environments", body)["id"]
         save(api=api, pid=pid, env=env_id)
         started = call(api, "POST", "/environments/%s/start" % env_id, timeout=180)
     except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
@@ -115,6 +198,9 @@ def up(args: argparse.Namespace) -> int:
     save(api=api, pid=pid, env=env_id, cdp=cdp)
     if not cdp:
         print("启动返回里没有 CDP 端点: %s" % json.dumps(rt, ensure_ascii=False), file=sys.stderr)
+        return UNSCORED
+    if not wait_cdp(cdp, 30):
+        print("CDP 端点未就绪: %s" % cdp, file=sys.stderr)
         return UNSCORED
     print("CDP=" + cdp)
     gh = os.environ.get("GITHUB_OUTPUT")
@@ -134,10 +220,7 @@ def down(_args: argparse.Namespace) -> int:
         except (OSError, ValueError, RuntimeError) as exc:
             print("停止副本失败: %s" % exc, file=sys.stderr)
     if st.get("pid"):
-        try:
-            os.killpg(st["pid"], signal.SIGTERM)
-        except OSError:
-            pass
+        stop_group(st["pid"])
     STATE.unlink(missing_ok=True)
     return 0
 
