@@ -24,3 +24,18 @@ def test_language_is_managed_not_inherited():
     assert rp.PREFS["language_mode"] == "custom"
     assert rp.PREFS["languages"][0] == "en-US"
     assert rp.PREFS["font_isolation"] == "strict"
+
+def test_ci_profile_hides_webrtc():
+    """CI profile must use proxy so hide_webrtc is true and STUN cannot leak the exit IP (srflx)."""
+    import importlib.util
+    from pathlib import Path
+
+    from hx_browser.models import Fingerprint
+
+    path = Path(__file__).resolve().parents[1] / "gate" / "real_profile.py"
+    spec = importlib.util.spec_from_file_location("real_profile_webrtc", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.FINGERPRINT.get("webrtc_mode") == "proxy"
+    fp = Fingerprint(**{**Fingerprint().model_dump(), **mod.FINGERPRINT})
+    assert fp.webrtc_mode == "proxy"
