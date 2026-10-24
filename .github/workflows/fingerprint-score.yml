@@ -1,12 +1,43 @@
 name: fingerprint-score
 
-# 流水线评分 = 指纹环境自检. 红 (2) 阻断, 黄 (1) 记录, 绿 (0) 通过.
-# 默认只手动触发: 无头环境里 chromium 与 profile 不一定可用, 缺环境不能当红.
+# 指纹评分流水线: PR / main 推送 / 每日定时自动跑, 也可手动触发.
+# 1) gate-unit  门禁抽取器单测, 不开网站, 失败即阻断
+# 2) audit      fingerprint-audit 自检, 红 (2) 阻断, 黄 (1) 警告, 跑不起来记为未评分
+# 3) sites      公开检测站实采 + 评分卡, 只记录不阻断 (检测站与 runner 出口 IP 不受我们控制)
 on:
+    pull_request:
+        paths:
+            - "packages/browser/**"
+            - "packages/fingerprint/**"
+            - "packages/fingerprint-audit/**"
+            - ".github/workflows/fingerprint-score.yml"
+    push:
+        branches: [main]
+    schedule:
+        - cron: "0 19 * * *" # 03:00 Asia/Shanghai
     workflow_dispatch:
 
+permissions:
+    contents: read
+
+concurrency:
+    group: fp-score-${{ github.ref }}
+    cancel-in-progress: true
+
 jobs:
-    score:
+    gate-unit:
+        name: 门禁抽取器单测
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - name: engine tests
+              run: node --experimental-strip-types --test packages/browser/gate/engine.test.ts packages/browser/gate/claude-env.test.ts
+
+    audit:
+        name: 指纹自检 (audit)
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -15,31 +46,105 @@ jobs:
               run: npx playwright install --with-deps chromium
             - name: fingerprint audit
               id: audit
+              working-directory: packages/fingerprint-audit
               run: |
                   set +e
-                  cd packages/fingerprint-audit
-                  uv run audit.py --launch headless --json > "$RUNNER_TEMP/score.json" 2>"$RUNNER_TEMP/score.err"
+                  uv run audit.py --launch headless --json > "$RUNNER_TEMP/score.json" 2> "$RUNNER_TEMP/score.err"
                   code=$?
                   cat "$RUNNER_TEMP/score.json" || true
                   cat "$RUNNER_TEMP/score.err" || true
                   echo "exit_code=$code" >> "$GITHUB_OUTPUT"
                   exit 0
             - name: judge by score
+              env:
+                  CODE: ${{ steps.audit.outputs.exit_code }}
               run: |
-                  code="${{ steps.audit.outputs.exit_code }}"
-                  echo "fingerprint score exit code: $code (0 green / 1 yellow / 2 red)"
-                  if [ "$code" = "2" ]; then
-                      echo "::error::fingerprint audit failed (red), blocking"
-                      exit 1
-                  fi
-                  if [ "$code" = "1" ]; then
-                      echo "::warning::fingerprint audit is yellow, needs human review"
-                  fi
-                  if [ "$code" != "0" ] && [ "$code" != "1" ] && [ "$code" != "2" ]; then
-                      echo "::warning::audit 未能运行 (exit $code), 视为未评分而不是失败"
-                  fi
+                  echo "fingerprint audit exit code: $CODE (0 green / 1 yellow / 2 red)"
+                  echo "## 指纹自检: exit $CODE (0 绿 / 1 黄 / 2 红)" >> "$GITHUB_STEP_SUMMARY"
+                  case "$CODE" in
+                      0) ;;
+                      1) echo "::warning::fingerprint audit is yellow, needs human review" ;;
+                      2) echo "::error::fingerprint audit failed (red), blocking"; exit 1 ;;
+                      *) echo "::warning::audit 未能运行 (exit $CODE), 视为未评分而不是失败" ;;
+                  esac
             - uses: actions/upload-artifact@v4
+              if: always()
               with:
-                  name: fingerprint-score
-                  path: ${{ runner.temp }}/score.json
+                  name: fingerprint-audit
+                  path: |
+                      ${{ runner.temp }}/score.json
+                      ${{ runner.temp }}/score.err
+                  if-no-files-found: warn
+
+    claude-env:
+        name: Claude 环境评分 (对齐 NodeCloak, 高风险阻断)
+        needs: gate-unit
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v4
+            - uses: astral-sh/setup-uv@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - name: install chromium
+              working-directory: packages/browser
+              run: uv run --with playwright playwright install --with-deps chromium
+            - name: probe
+              working-directory: packages/browser
+              run: uv run --with playwright python gate/claude_env_probe.py --out "$RUNNER_TEMP/claude-env.json"
+            - name: score (0 low / 1 medium / 2 high)
+              run: |
+                  set +e
+                  node --experimental-strip-types packages/browser/gate/claude-env.ts "$RUNNER_TEMP/claude-env.json" | tee "$RUNNER_TEMP/claude-env.txt"
+                  code=${PIPESTATUS[0]}
+                  { echo "## Claude 环境评分 (FuckClaude 信号, 越低越好)"; sed 's/^/    /' "$RUNNER_TEMP/claude-env.txt"; } >> "$GITHUB_STEP_SUMMARY"
+                  case "$code" in
+                      0) ;;
+                      1) echo "::warning::claude env medium risk, needs review" ;;
+                      *) echo "::error::claude env high risk (exit $code), blocking"; exit 1 ;;
+                  esac
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: claude-env
+                  path: ${{ runner.temp }}/claude-env.*
+                  if-no-files-found: warn
+
+    sites:
+        name: 公开检测站评分 (只记录)
+        needs: gate-unit
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v4
+            - uses: astral-sh/setup-uv@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - name: install chromium
+              working-directory: packages/browser
+              run: uv run --with playwright playwright install --with-deps chromium
+            - name: capture checker pages
+              id: capture
+              continue-on-error: true
+              working-directory: packages/browser
+              run: uv run --with playwright python gate/probe.py --out "$RUNNER_TEMP/sites.json"
+            - name: score
+              if: steps.capture.outcome == 'success'
+              run: |
+                  node --experimental-strip-types packages/browser/gate/score.ts --no-fail "$RUNNER_TEMP/sites.json" "$RUNNER_TEMP/scorecard.svg" | tee "$RUNNER_TEMP/score.txt"
+                  echo "## 公开检测站评分" >> "$GITHUB_STEP_SUMMARY"
+                  grep -v "^RESULT " "$RUNNER_TEMP/score.txt" | sed "s/^/    /" >> "$GITHUB_STEP_SUMMARY"
+            - name: capture unavailable
+              if: steps.capture.outcome != 'success'
+              run: echo "::warning::检测站实采未能运行, 视为未评分而不是失败"
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: fingerprint-sites
+                  path: |
+                      ${{ runner.temp }}/sites.json
+                      ${{ runner.temp }}/scorecard.svg
+                      ${{ runner.temp }}/score.txt
                   if-no-files-found: warn
