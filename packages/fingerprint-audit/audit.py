@@ -37,6 +37,9 @@ from probes import sites                      # noqa: E402
 from probes.cdp import Browser, cdp_alive     # noqa: E402
 import rules                                  # noqa: E402
 
+# 退出码: 0 绿 / 1 黄 / 2 红 / 3 环境没起来 (未评分, CI 记 warning 不阻断)
+UNSCORED = 3
+
 CLOAK_LAUNCH = os.path.abspath(os.path.join(
     HERE, "..", "scripts", "freebuff-register", "cloak_launch.py"))
 
@@ -172,7 +175,7 @@ def main():
             time.sleep(0.5)
         else:
             print("[fp-audit] 环境未就绪 (CDP 无响应)")
-            return 2
+            return UNSCORED  # 环境没起来 = 未评分, 不是红
         a.endpoint = ep
 
     # --expect-tz auto: 在**被测浏览器内**查出口地理, 拿到真实时区
@@ -215,7 +218,7 @@ def main():
     try:
         if not cdp_alive(a.endpoint):
             print("[fp-audit] CDP 端点无响应: " + a.endpoint)
-            return 2
+            return UNSCORED  # 同上: 没测到指纹, 不是红
         rep = run(a.endpoint, expect_tz=a.expect_tz, label=a.label,
                   only=[x for x in a.only.split(",") if x] or None, wait=a.wait)
     finally:
