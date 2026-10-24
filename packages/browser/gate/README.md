@@ -52,3 +52,9 @@ NodeCloak 用 IPPure 与 FuckClaude 两个检测页的分数说明效果 (越低
 - claude_env_probe.py: 取信号; 加 --cdp 直接读正在跑的 hx-browser 副本
 
 不超过 10 低风险 (0), 不超过 30 中风险 (1, 警告), 超过 30 高风险 (2, 阻断)。
+
+## 真实副本评分
+
+`claude-env-profile` job 用 `gate/real_profile.py up --spawn` 拉起 hx-browser API 与一个 headless 副本 (英文 / UTC / strict 字体 / 按 seed 噪声), 把 CDP 端点交给 `claude_env_probe.py --cdp` 评分, 结束时 `down`。拉不起来记为未评分 (不阻断), 高风险阻断。普通 Playwright Chromium 的 `claude-env` job 保留, 只作宿主基线对照。
+
+注意: 数据目录固定在 `packages/browser/data`。本机对在用的服务跑 `up` (不带 `--spawn`) 会在环境列表里多一个 `ci-fingerprint-score` (按名复用)。

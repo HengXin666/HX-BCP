@@ -111,6 +111,65 @@ jobs:
                   path: ${{ runner.temp }}/claude-env.*
                   if-no-files-found: warn
 
+    claude-env-profile:
+        name: Claude 环境评分 · 真实 hx-browser 副本 (--cdp, 高风险阻断)
+        needs: gate-unit
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v4
+            - uses: astral-sh/setup-uv@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - name: browser deps (fontconfig, chrome)
+              run: |
+                  sudo apt-get update -qq && sudo apt-get install -y -qq fontconfig
+                  google-chrome-stable --version || echo "::warning::runner 上没有 google-chrome-stable"
+            - name: start real profile
+              id: up
+              working-directory: packages/browser
+              run: |
+                  set +e
+                  uv run python gate/real_profile.py up --spawn
+                  code=$?
+                  echo "up_exit=$code" >> "$GITHUB_OUTPUT"
+                  if [ "$code" != "0" ]; then
+                      echo "::warning::真实副本没拉起来 (exit $code), 本 job 记为未评分"
+                      tail -n 80 "$RUNNER_TEMP/hx-browser-api.log" || true
+                  fi
+                  exit 0
+            - name: probe via CDP
+              if: steps.up.outputs.up_exit == '0'
+              working-directory: packages/browser
+              env:
+                  CDP: ${{ steps.up.outputs.cdp }}
+              run: uv run --with playwright python gate/claude_env_probe.py --cdp "$CDP" --out "$RUNNER_TEMP/claude-env-profile.json"
+            - name: score (0 low / 1 medium / 2 high)
+              if: steps.up.outputs.up_exit == '0'
+              run: |
+                  set +e
+                  node --experimental-strip-types packages/browser/gate/claude-env.ts "$RUNNER_TEMP/claude-env-profile.json" | tee "$RUNNER_TEMP/claude-env-profile.txt"
+                  code=${PIPESTATUS[0]}
+                  { echo "## Claude 环境评分 · 真实 hx-browser 副本 (越低越好)"; sed 's/^/    /' "$RUNNER_TEMP/claude-env-profile.txt"; } >> "$GITHUB_STEP_SUMMARY"
+                  case "$code" in
+                      0) ;;
+                      1) echo "::warning::real profile claude env medium risk, needs review" ;;
+                      *) echo "::error::real profile claude env high risk (exit $code), blocking"; exit 1 ;;
+                  esac
+            - name: stop real profile
+              if: always()
+              working-directory: packages/browser
+              run: uv run python gate/real_profile.py down
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: claude-env-profile
+                  path: |
+                      ${{ runner.temp }}/claude-env-profile.*
+                      ${{ runner.temp }}/hx-browser-api.log
+                  if-no-files-found: warn
+
     sites:
         name: 公开检测站评分 (只记录)
         needs: gate-unit
