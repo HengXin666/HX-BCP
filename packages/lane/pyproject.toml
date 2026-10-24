@@ -5,6 +5,9 @@ description = "人机双通道准入判定: 人类通道要本机令牌, Agent �
 requires-python = ">=3.10"
 dependencies = []
 
+[project.scripts]
+bcp-lane = 'lane:main'
+
 [dependency-groups]
 dev = ["pytest>=8.0"]
 
