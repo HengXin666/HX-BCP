@@ -15,6 +15,8 @@ Agent Note: .agents/notes/implemented/feature/2026-10-16-hxbrowser-strict-isolat
 * ``baseline``: 常见 Linux 发行版都有的拉丁基础族 + 电脑上**所有能显示中文的字体**
   (用户明确要求保留中文字体; 去掉它们中文页面会变方块, 本身就是异常信号)。
 * ``custom``: 用户给的族名列表 (仍会自动补上中文字体, 理由同上)。
+* ``strict``: 只留拉丁基础族与 Emoji, 去掉所有能显示中文的字体。对齐 NodeCloak 的「限制字体」:
+  需用户主动选择, 不进一键修复; 中文页面可能显示为方块。
 * ``inherit``: 不隔离 (= 改动前行为)。
 
 Firefox 的 font.system.whitelist (firefox_prefs) 继续保留, 与本层叠加。
@@ -78,17 +80,20 @@ def cjk_fonts() -> list[tuple[str, str]]:
 
 
 def select(mode: str, families: list[str]) -> list[tuple[str, str]]:
-    """按模式选出 (族名, 文件) 列表; 中文字体总是保留。"""
-    wanted = [
-        f.lower() for f in (BASELINE_FAMILIES if mode == "baseline" else families)
-    ]
+    """按模式选出 (族名, 文件) 列表; 除 strict 外中文字体总是保留。"""
+    base = BASELINE_FAMILIES if mode in ("baseline", "strict") else families
+    wanted = [f.lower() for f in base]
     chosen = {
         path: fam
         for fam, path in system_fonts()
         if any(fam.lower() == w or fam.lower().startswith(w + " ") for w in wanted)
     }
-    for fam, path in cjk_fonts():
-        chosen.setdefault(path, fam)
+    if mode == "strict":
+        cjk = {path for _fam, path in cjk_fonts()}
+        chosen = {path: fam for path, fam in chosen.items() if path not in cjk}
+    else:
+        for fam, path in cjk_fonts():
+            chosen.setdefault(path, fam)
     return sorted(((fam, path) for path, fam in chosen.items()), key=lambda x: x[1])
 
 

@@ -28,7 +28,7 @@ TimezoneMode = Literal["inherit", "system", "ip", "custom"]
 WebRtcPolicy = Literal["inherit", "default", "public", "proxy", "disable"]
 Tristate = Literal["inherit", "on", "off"]
 Isolation = Literal["process", "sandbox"]
-FontIsolation = Literal["inherit", "baseline", "custom"]
+FontIsolation = Literal["inherit", "baseline", "strict", "custom"]
 WindowSystem = Literal["auto", "x11", "wayland"]
 SandboxX11 = Literal["nested", "shared"]
 
