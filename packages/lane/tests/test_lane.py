@@ -32,3 +32,14 @@ def test_human_token_not_accepted_for_agent_lane():
     got = lane.decide("agent", token="whatever", project="")
     assert got.ok is False
     assert got.code == "project_required"
+
+
+def test_cli_issue_and_check_never_echo_token(tmp_path, capsys):
+    '''CLI 生成的令牌权限为 0600, check 能查到, 输出里不含令牌本身'''
+    file = tmp_path / 'human.token'
+    assert lane.main(['--path', str(file), 'check']) == 1
+    assert lane.main(['--path', str(file), 'issue']) == 0
+    assert file.stat().st_mode & 0o777 == 0o600
+    assert lane.main(['--path', str(file), 'check']) == 0
+    token = lane.read_human_token(file)
+    assert token and token not in capsys.readouterr().out

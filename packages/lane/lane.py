@@ -84,3 +84,29 @@ def decide(lane: str, token: str = "", project: str = "",
                         audit={"lane": AGENT, "project": project, "at": time.time()})
     return Decision(True, AGENT, project=name,
                     audit={"lane": AGENT, "project": name, "at": time.time()})
+
+
+def main(argv: list[str] | None = None) -> int:
+    '''命令行入口: issue 生成本机人类令牌, check 查看令牌是否存在, 都不回显令牌本身'''
+    import argparse
+
+    parser = argparse.ArgumentParser(prog='bcp-lane', description='human token stays in a local file only')
+    parser.add_argument('--path', type=Path, default=None, help='token file, default ~/.bcp/human.token')
+    sub = parser.add_subparsers(dest='cmd', required=True)
+    sub.add_parser('issue', help='generate a new local human token, the old one stops working')
+    sub.add_parser('check', help='report whether a local human token exists')
+    args = parser.parse_args(argv)
+    file = args.path or TOKEN_FILE
+    if args.cmd == 'issue':
+        issue_human_token(file)
+        print(f'issued, file={file}, mode={oct(file.stat().st_mode & 0o777)}')
+        return 0
+    if read_human_token(file):
+        print(f'present, file={file}')
+        return 0
+    print(f'missing, file={file}, run: bcp-lane issue')
+    return 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
