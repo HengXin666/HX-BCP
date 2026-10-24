@@ -39,6 +39,7 @@ FINGERPRINT = {
     "canvas_noise": True,
     "webgl_noise": True,
     "audio_noise": True,
+    "webrtc_mode": "proxy",  # hide_webrtc: no STUN, no srflx leak
 }
 PREFS = {
     "font_isolation": "strict",
