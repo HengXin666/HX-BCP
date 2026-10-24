@@ -21,15 +21,15 @@
 抽取器测试不打开网站，CI 跑的是这一条：
 
 ```bash
-node --experimental-strip-types --test services/hx-browser/gate/engine.test.ts
+node --experimental-strip-types --test packages/browser/gate/engine.test.ts
 ```
 
 实测要接到已经启动的 hx-browser 环境。不要把本机无头 Chromium 的结果当成产品分。
 
 ```bash
-uv run python services/hx-browser/gate/probe.py \
+uv run python packages/browser/gate/probe.py \
     --cdp http://127.0.0.1:43000 --out /tmp/sites.json
-node --experimental-strip-types services/hx-browser/gate/score.ts /tmp/sites.json /tmp/scorecard.svg
+node --experimental-strip-types packages/browser/gate/score.ts /tmp/sites.json /tmp/scorecard.svg
 ```
 
 ## 对照
@@ -42,3 +42,19 @@ node --experimental-strip-types services/hx-browser/gate/score.ts /tmp/sites.jso
 有头和无头都套在 Xvfb 里，这样有头不是「没有显示器就退回无头」。
 
 
+
+## Claude 环境评分 (对齐 NodeCloak)
+
+NodeCloak 用 IPPure 与 FuckClaude 两个检测页的分数说明效果 (越低越好, 它的复检是 3 分)。这里把 FuckClaude 公布的信号做成本地探针, 不访问外站, 所以 CI 可以拿它阻断。
+
+- claude-env.js: 页面内读信号 (时区 / 语言 / Intl locale / UTC 偏移 / 中文字体 / 厂商字体 / WebRTC 候选 IP / UA 与 brands / WebGL 渲染器)
+- claude-env.ts: 按权重打分; 时区 24 / 语言 18 / 中文字体 14 / 厂商字体 10 / WebRTC 10 是 FuckClaude 公布值, 其余为估计值
+- claude_env_probe.py: 取信号; 加 --cdp 直接读正在跑的 hx-browser 副本
+
+不超过 10 低风险 (0), 不超过 30 中风险 (1, 警告), 超过 30 高风险 (2, 阻断)。
+
+## 真实副本评分
+
+`claude-env-profile` job 用 `gate/real_profile.py up --spawn` 拉起 hx-browser API 与一个 headless 副本 (英文 / UTC / strict 字体 / 按 seed 噪声), 把 CDP 端点交给 `claude_env_probe.py --cdp` 评分, 结束时 `down`。拉不起来记为未评分 (不阻断), 高风险阻断。普通 Playwright Chromium 的 `claude-env` job 保留, 只作宿主基线对照。
+
+注意: 数据目录固定在 `packages/browser/data`。本机对在用的服务跑 `up` (不带 `--spawn`) 会在环境列表里多一个 `ci-fingerprint-score` (按名复用)。

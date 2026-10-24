@@ -4,9 +4,9 @@ This file does not score. ``score.ts`` reads the JSON.
 
 Attach to a running hx-browser environment:
 
-    uv run python services/hx-browser/gate/probe.py \\
+    uv run python packages/browser/gate/probe.py \\
         --cdp http://127.0.0.1:43000 --out /tmp/sites.json
-    node services/hx-browser/gate/score.ts /tmp/sites.json /tmp/scorecard.svg
+    node packages/browser/gate/score.ts /tmp/sites.json /tmp/scorecard.svg
 
 Without ``--cdp`` it launches the Chromium on this machine and labels the
 capture ``local-chromium``. That run is not an hx-browser score.
