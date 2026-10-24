@@ -37,30 +37,57 @@ jobs:
               run: node --experimental-strip-types --test packages/browser/tests/noise.test.mjs packages/browser/gate/engine.test.ts packages/browser/gate/claude-env.test.ts
 
     audit:
-        name: 指纹自检 (audit)
+        name: 指纹自检 (audit · 真实 hx-browser 副本)
         runs-on: ubuntu-latest
+        timeout-minutes: 20
         steps:
             - uses: actions/checkout@v4
             - uses: astral-sh/setup-uv@v4
-            - name: install chromium
-              run: npx playwright install --with-deps chromium
+            - name: browser deps (fontconfig, chrome)
+              run: |
+                  sudo apt-get update -qq && sudo apt-get install -y -qq fontconfig
+                  google-chrome-stable --version || echo "::warning::runner 上没有 google-chrome-stable"
+            - name: start real profile
+              id: up
+              working-directory: packages/browser
+              run: |
+                  set +e
+                  uv run python gate/real_profile.py up --spawn
+                  code=$?
+                  echo "up_exit=$code" >> "$GITHUB_OUTPUT"
+                  if [ "$code" != "0" ]; then
+                      echo "::warning::真实副本没拉起来 (exit $code), audit 记为未评分"
+                      tail -n 80 "$RUNNER_TEMP/hx-browser-api.log" || true
+                  fi
+                  exit 0
             - name: fingerprint audit
               id: audit
               working-directory: packages/fingerprint-audit
+              env:
+                  CDP: ${{ steps.up.outputs.cdp }}
+                  UP: ${{ steps.up.outputs.up_exit }}
               run: |
                   set +e
-                  uv run audit.py --launch headless --json > "$RUNNER_TEMP/score.json" 2> "$RUNNER_TEMP/score.err"
+                  if [ "$UP" != "0" ] || [ -z "$CDP" ]; then
+                      echo "exit_code=3" >> "$GITHUB_OUTPUT"
+                      exit 0
+                  fi
+                  uv run audit.py --endpoint "$CDP" --label ci-real-profile --json > "$RUNNER_TEMP/score.json" 2> "$RUNNER_TEMP/score.err"
                   code=$?
                   cat "$RUNNER_TEMP/score.json" || true
                   cat "$RUNNER_TEMP/score.err" || true
                   echo "exit_code=$code" >> "$GITHUB_OUTPUT"
                   exit 0
+            - name: stop real profile
+              if: always()
+              working-directory: packages/browser
+              run: uv run python gate/real_profile.py down
             - name: judge by score
               env:
                   CODE: ${{ steps.audit.outputs.exit_code }}
               run: |
-                  echo "fingerprint audit exit code: $CODE (0 green / 1 yellow / 2 red)"
-                  echo "## 指纹自检: exit $CODE (0 绿 / 1 黄 / 2 红)" >> "$GITHUB_STEP_SUMMARY"
+                  echo "fingerprint audit exit code: $CODE (0 green / 1 yellow / 2 red / 3 unscored)"
+                  echo "## 指纹自检 (真实副本): exit $CODE (0 绿 / 1 黄 / 2 红 / 3 未评分)" >> "$GITHUB_STEP_SUMMARY"
                   case "$CODE" in
                       0) ;;
                       1) echo "::warning::fingerprint audit is yellow, needs human review" ;;
@@ -74,6 +101,7 @@ jobs:
                   path: |
                       ${{ runner.temp }}/score.json
                       ${{ runner.temp }}/score.err
+                      ${{ runner.temp }}/hx-browser-api.log
                   if-no-files-found: warn
 
     claude-env:
