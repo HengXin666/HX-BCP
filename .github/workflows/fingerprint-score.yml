@@ -265,6 +265,8 @@ jobs:
                       ${{ runner.temp }}/hx-browser-api.log
                   if-no-files-found: warn
             - name: publish scorecard
+              # 只记录: 发不出去 (例如 fork PR 只读 token) 不能把 job 弄红
+              continue-on-error: true
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   SVG: ${{ runner.temp }}/scorecard.svg

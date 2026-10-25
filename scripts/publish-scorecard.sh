@@ -100,18 +100,17 @@ if [ -z "$PR" ]; then
     exit 0
 fi
 
-COMMENT_ID=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
-    --jq ".[] | select(.body | startswith("${MARKER}")) | .id" | head -n 1)
+# 用 jq 的 --arg 传 marker: 直接把变量拼进 gh --jq 的双引号里会被 shell 拆词
+COMMENT_ID=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate --slurp 2>/dev/null \
+    | jq -r --arg m "$MARKER" 'add | .[] | select(.body | startswith($m)) | .id' 2>/dev/null \
+    | head -n 1) || true
 
-set +e
+code=1
 if [ -n "$COMMENT_ID" ]; then
-    gh api -X PATCH "repos/${REPO}/issues/comments/${COMMENT_ID}" -f body="$BODY" >/dev/null
-    code=$?
+    gh api -X PATCH "repos/${REPO}/issues/comments/${COMMENT_ID}" -f body="$BODY" >/dev/null && code=0 || code=$?
 else
-    gh api -X POST "repos/${REPO}/issues/${PR}/comments" -f body="$BODY" >/dev/null
-    code=$?
+    gh api -X POST "repos/${REPO}/issues/${PR}/comments" -f body="$BODY" >/dev/null && code=0 || code=$?
 fi
-set -e
 
 if [ "$code" != "0" ]; then
     echo "::warning::评分卡没能贴到 PR #${PR} (fork PR 的 token 只读), 已写入步骤摘要"
