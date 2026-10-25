@@ -58,3 +58,17 @@ NodeCloak 用 IPPure 与 FuckClaude 两个检测页的分数说明效果 (越低
 `claude-env-profile` job 用 `gate/real_profile.py up --spawn` 拉起 hx-browser API 与一个 headless 副本 (英文 / UTC / strict 字体 / 按 seed 噪声), 把 CDP 端点交给 `claude_env_probe.py --cdp` 评分, 结束时 `down`。拉不起来记为未评分 (不阻断), 高风险阻断。普通 Playwright Chromium 的 `claude-env` job 保留, 只作宿主基线对照。
 
 注意: 数据目录固定在 `packages/browser/data`。本机对在用的服务跑 `up` (不带 `--spawn`) 会在环境列表里多一个 `ci-fingerprint-score` (按名复用)。
+
+`sites` job 走同一条路: `up --spawn` 拉起真实副本, `probe.py --cdp` 实采, `score.ts` 出评分卡, 最后 `down`。评分卡抬头会写明实测的浏览器标签 (`hx-browser-cdp` 还是 `local-chromium`), 后者不是产品的分。数据目录可用 `HX_BROWSER_DATA_DIR` 覆盖。
+
+## 评分卡贴回 PR
+
+`sites` job 的最后一步跑 `scripts/publish-scorecard.sh`:
+
+1. 把 SVG 提交到本仓的 `fingerprint-scorecard` 分支 (`scorecards/pr-<号>.svg`; main 推送写 `scorecards/latest.svg`)。
+2. 用 raw 地址贴成 PR 评论; 同一条评论按 marker 原地更新, 不刷屏。
+3. 同样内容写进步骤摘要。
+
+GitHub 不渲染 artifact 链接, 也会过滤 data URI, 所以必须先有一个能公开拉取的地址。fork 来的 PR 拿到只读 token, 那时只写步骤摘要并给 warning, 不阻断。
+
+写权限只给 `sites` 这一条 job (`contents: write` + `pull-requests: write`), 其余 job 仍是 `contents: read`。

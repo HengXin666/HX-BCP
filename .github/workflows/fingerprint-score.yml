@@ -3,13 +3,15 @@ name: fingerprint-score
 # 指纹评分流水线: PR / main 推送 / 每日定时自动跑, 也可手动触发.
 # 1) gate-unit  门禁抽取器单测, 不开网站, 失败即阻断
 # 2) audit      fingerprint-audit 自检, 红 (2) 阻断, 黄 (1) 警告, 跑不起来记为未评分
-# 3) sites      公开检测站实采 + 评分卡, 只记录不阻断 (检测站与 runner 出口 IP 不受我们控制)
+# 3) sites      公开检测站实采 (接真实副本 CDP) + 评分卡, 只记录不阻断 (检测站与 runner 出口 IP 不受我们控制)
+# sites 的最后一步把评分卡发到 PR 评论 / 步骤摘要, 让人不点进 run 也能看到那张 SVG
 on:
     pull_request:
         paths:
             - "packages/browser/**"
             - "packages/fingerprint/**"
             - "packages/fingerprint-audit/**"
+            - "scripts/publish-scorecard.sh"
             - ".github/workflows/fingerprint-score.yml"
     push:
         branches: [main]
@@ -202,30 +204,56 @@ jobs:
         name: 公开检测站评分 (只记录)
         needs: gate-unit
         runs-on: ubuntu-latest
-        timeout-minutes: 20
+        timeout-minutes: 25
+        # 只有这一条 job 需要写: contents 推评分卡分支, pull-requests 贴评论
+        permissions:
+            contents: write
+            pull-requests: write
         steps:
             - uses: actions/checkout@v4
             - uses: astral-sh/setup-uv@v4
             - uses: actions/setup-node@v4
               with:
                   node-version: 22
-            - name: install chromium
+            - name: browser deps (fontconfig, chrome)
+              run: |
+                  sudo apt-get update -qq && sudo apt-get install -y -qq fontconfig
+                  google-chrome-stable --version || echo "::warning::runner 上没有 google-chrome-stable"
+            # 评分对象必须是真实副本: 裸 Playwright Chromium 的分不是产品的分 (见 gate/README.md)
+            - name: start real profile
+              id: up
               working-directory: packages/browser
-              run: uv run --with playwright playwright install --with-deps chromium
+              run: |
+                  set +e
+                  uv run python gate/real_profile.py up --spawn
+                  code=$?
+                  echo "up_exit=$code" >> "$GITHUB_OUTPUT"
+                  if [ "$code" != "0" ]; then
+                      echo "::warning::真实副本没拉起来 (exit $code), 本 job 记为未评分"
+                      tail -n 80 "$RUNNER_TEMP/hx-browser-api.log" || true
+                  fi
+                  exit 0
             - name: capture checker pages
               id: capture
+              if: steps.up.outputs.up_exit == '0'
               continue-on-error: true
               working-directory: packages/browser
-              run: uv run --with playwright python gate/probe.py --out "$RUNNER_TEMP/sites.json"
+              env:
+                  CDP: ${{ steps.up.outputs.cdp }}
+              run: uv run --with playwright python gate/probe.py --cdp "$CDP" --out "$RUNNER_TEMP/sites.json"
             - name: score
               if: steps.capture.outcome == 'success'
               run: |
+                  set +e
                   node --experimental-strip-types packages/browser/gate/score.ts --no-fail "$RUNNER_TEMP/sites.json" "$RUNNER_TEMP/scorecard.svg" | tee "$RUNNER_TEMP/score.txt"
-                  echo "## 公开检测站评分" >> "$GITHUB_STEP_SUMMARY"
-                  grep -v "^RESULT " "$RUNNER_TEMP/score.txt" | sed "s/^/    /" >> "$GITHUB_STEP_SUMMARY"
+                  exit 0
+            - name: stop real profile
+              if: always()
+              working-directory: packages/browser
+              run: uv run python gate/real_profile.py down
             - name: capture unavailable
-              if: steps.capture.outcome != 'success'
-              run: echo "::warning::检测站实采未能运行, 视为未评分而不是失败"
+              if: steps.up.outputs.up_exit != '0' || steps.capture.outcome != 'success'
+              run: echo "::warning::检测站实采未能运行 (真实副本没起来或站点全挂), 视为未评分而不是失败"
             - uses: actions/upload-artifact@v4
               if: always()
               with:
@@ -234,4 +262,14 @@ jobs:
                       ${{ runner.temp }}/sites.json
                       ${{ runner.temp }}/scorecard.svg
                       ${{ runner.temp }}/score.txt
+                      ${{ runner.temp }}/hx-browser-api.log
                   if-no-files-found: warn
+            - name: publish scorecard
+              # 只记录: 发不出去 (例如 fork PR 只读 token) 不能把 job 弄红
+              continue-on-error: true
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  SVG: ${{ runner.temp }}/scorecard.svg
+                  TXT: ${{ runner.temp }}/score.txt
+                  PR: ${{ github.event.pull_request.number }}
+              run: bash scripts/publish-scorecard.sh
