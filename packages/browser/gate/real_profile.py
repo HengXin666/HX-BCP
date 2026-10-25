@@ -1,7 +1,7 @@
 """在 CI 里拉起一个真实 hx-browser 副本, 给评分脚本一个 --cdp 端点 (而不是普通 Playwright Chromium)。
 
-up:   (--spawn 时) 启动 hx-browser API, 建/按名复用 ci-fingerprint-score 环境, headless 启动,
-      打印 CDP=<url> 并写状态文件; 在 GitHub Actions 里同时写 $GITHUB_OUTPUT 的 cdp=...
+up:   (--spawn 时) 启动 hx-browser API (python run.py serve), 建/按名复用 ci-fingerprint-score 环境,
+      headless 启动, 打印 CDP=<url> 并写状态文件; 在 GitHub Actions 里同时写 $GITHUB_OUTPUT 的 cdp=...
 down: 停掉该环境; up 时由本脚本拉起的 API 一并结束。
 
 环境配置对齐 NodeCloak 复检截图里的「干净」副本: 英文、UTC、strict 字体隔离、按 seed 噪声。
@@ -122,13 +122,16 @@ def call(api: str, method: str, path: str, body: dict | None = None, timeout: fl
     return out.get("data", out) if isinstance(out, dict) else out
 
 
-def wait_api(api: str, seconds: float) -> bool:
+def wait_api(api: str, seconds: float, proc: subprocess.Popen | None = None) -> bool:
+    """等 API 就绪; 子进程已经退出就立刻返回, 不要空等满 wait 秒."""
     end = time.time() + seconds
     while time.time() < end:
         try:
             call(api, "GET", "/status", timeout=5)
             return True
         except (OSError, ValueError, RuntimeError):
+            if proc is not None and proc.poll() is not None:
+                return False
             time.sleep(1)
     return False
 
@@ -161,14 +164,20 @@ def save(**state) -> None:
     STATE.write_text(json.dumps(state), encoding="utf-8")
 
 
+def spawn_command(port: int) -> list[str]:
+    """拉起 API 的命令行; run.py 现在是 hxb 的壳, 少了 serve 会被 argparse 判成非法参数."""
+    return [sys.executable, "run.py", "serve", "--host", "127.0.0.1", "--port", str(port)]
+
+
 def up(args: argparse.Namespace) -> int:
     pid = 0
+    proc = None
     api = args.api or local(DEFAULT_PORT)
     if args.spawn:
         api = local(args.port)
         log = open(TMP / "hx-browser-api.log", "w", encoding="utf-8")  # noqa: SIM115 子进程持有
         proc = subprocess.Popen(
-            [sys.executable, "run.py", "--host", "127.0.0.1", "--port", str(args.port)],
+            spawn_command(args.port),
             cwd=PKG,
             stdout=log,
             stderr=subprocess.STDOUT,
@@ -176,8 +185,10 @@ def up(args: argparse.Namespace) -> int:
         )
         pid = proc.pid
     save(api=api, pid=pid)
-    if not wait_api(api, args.wait):
+    if not wait_api(api, args.wait, proc):
         print("hx-browser API 没有起来: %s" % api, file=sys.stderr)
+        if proc is not None and proc.poll() is not None:
+            print("API 进程已退出 (exit %s), 见 hx-browser-api.log" % proc.returncode, file=sys.stderr)
         return UNSCORED
     try:
         body = {"name": ENV_NAME, "fingerprint": profile_fingerprint(api), "prefs": PREFS}
