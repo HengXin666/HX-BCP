@@ -10,9 +10,20 @@ from pathlib import Path
 from .models import Settings
 
 APP_DIR = Path(__file__).resolve().parent.parent.parent  # hx-browser/
-DEFAULT_DATA_DIR = APP_DIR / "data"
-DEFAULT_PROFILES_DIR = DEFAULT_DATA_DIR / "profiles"
-DEFAULT_SETTINGS_PATH = DEFAULT_DATA_DIR / "settings.json"
+
+
+def env_data_dir() -> Path | None:
+    """返回 HX_BROWSER_DATA_DIR 指向的目录, 未设置或为空时返回 None."""
+    raw = os.environ.get("HX_BROWSER_DATA_DIR", "").strip()
+    if not raw:
+        return None
+    return Path(raw).expanduser().resolve()
+
+
+DATA_DIR = env_data_dir() or (APP_DIR / "data")
+DEFAULT_DATA_DIR = DATA_DIR
+DEFAULT_PROFILES_DIR = DATA_DIR / "profiles"
+DEFAULT_SETTINGS_PATH = DATA_DIR / "settings.json"
 
 
 def _find_executable(names: list[str]) -> str:
@@ -49,6 +60,9 @@ class SettingsManager:
             s.firefox_path = detect_firefox()
         if not s.data_dir:
             s.data_dir = str(DEFAULT_DATA_DIR)
+        override = env_data_dir()
+        if override is not None:
+            s.data_dir = str(override)
         return s
 
     def save(self, s: Settings) -> Settings:

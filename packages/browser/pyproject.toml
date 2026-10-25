@@ -1,6 +1,6 @@
 [project]
 name = "hx-browser"
-version = "0.1.0"
+version = "0.2.0"
 description = "HX-Browser: Linux web-service browser environment manager with CDP endpoints for Python crawler frameworks"
 requires-python = ">=3.10"
 dependencies = [
@@ -11,6 +11,9 @@ dependencies = [
     "httpx>=0.27",
     "markdown>=3.5",
 ]
+
+[project.scripts]
+hxb = "hx_browser.cli:main"
 
 [project.optional-dependencies]
 # crypto for account-pack password encryption

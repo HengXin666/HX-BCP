@@ -144,8 +144,8 @@ wheels = [
 
 [[package]]
 name = "hx-fingerprint"
-version = "0.1.0"
-source = { virtual = "." }
+version = "0.2.0"
+source = { editable = "." }
 dependencies = [
     { name = "curl-cffi" },
     { name = "websocket-client" },

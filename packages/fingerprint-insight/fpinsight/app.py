@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import shutil
 import time
 import uuid
@@ -22,14 +23,16 @@ from fastapi.staticfiles import StaticFiles
 from .hub import Hub
 from .session import FpSession, LaunchConfig, find_chromium
 
-ROOT = Path(__file__).resolve().parent.parent
-DATA = Path(__import__("os").environ.get("FPI_DATA_DIR") or (ROOT / "data"))
+PKG_DIR = Path(__file__).resolve().parent
+DASHBOARD_DIR = PKG_DIR / "dashboard"
+ROOT = PKG_DIR.parent
+DATA = Path(os.environ.get("FPI_DATA_DIR") or (ROOT / "data"))
 DATA.mkdir(parents=True, exist_ok=True)
 HUB = Hub(DATA / "fp-insight.db")
-_APP = FastAPI(title="fp-insight", version="0.1.0")
+_APP = FastAPI(title="fp-insight", version="0.2.0")
 SESSIONS: dict[str, FpSession] = {}
 
-_APP.mount("/static", StaticFiles(directory=str(ROOT / "dashboard")), name="static")
+_APP.mount("/static", StaticFiles(directory=str(DASHBOARD_DIR)), name="static")
 
 
 # --------------------------------------------------------------------- 探针入站
@@ -85,7 +88,7 @@ async def health() -> dict:
 
 @_APP.get("/", response_class=HTMLResponse)
 async def index() -> Any:
-    p = ROOT / "dashboard" / "index.html"
+    p = DASHBOARD_DIR / "index.html"
     if not p.exists():
         return JSONResponse({"error": "dashboard 未构建", "path": str(p)}, status_code=500)
     return HTMLResponse(p.read_text(encoding="utf-8"))
