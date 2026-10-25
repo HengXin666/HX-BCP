@@ -17,6 +17,7 @@ from . import api_fingerprint, api_hxcp, api_live, api_profiles, cdp, hxcp_link,
 from .browser import (BrowserManager, RUNTIME, cleanup_orphans, get_runtime,
                       load_persisted_runtime, parse_cookies, scan_orphans,
                       wait_window_verdict)
+from . import __version__
 from .config import settings_manager
 from .envview import apply_timezone_from_ip, env_dict
 from .models import Environment, Extension, Fingerprint, Proxy, RuntimeInfo, Settings, Template, now_ms
@@ -64,7 +65,7 @@ async def status():
     return ok({
         "status": "ok",
         "app": "hx-browser",
-        "version": "0.1.0",
+        "version": __version__,
         "api_port": s.api_port,
         "cdp_base_port": s.cdp_base_port,
         "running": len(RUNTIME),
@@ -730,7 +731,7 @@ def create_app() -> FastAPI:
         manager().stop_all()
         await relay.stop_all()
 
-    app = FastAPI(title="HX-Browser", version="0.1.0", lifespan=_lifespan)
+    app = FastAPI(title="HX-Browser", version=__version__, lifespan=_lifespan)
     try:
         n = load_persisted_runtime()
         hxcp_link.adopt_from_runtime()
