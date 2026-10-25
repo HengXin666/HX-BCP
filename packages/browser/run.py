@@ -9,29 +9,7 @@
 
 from __future__ import annotations
 
-import argparse
-import logging
-
-import uvicorn
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="HX-Browser web service")
-    parser.add_argument("--host", default="0.0.0.0", help="listen host (default 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=None, help="listen port (default from settings, 8325)")
-    parser.add_argument("--reload", action="store_true", help="dev auto-reload")
-    args = parser.parse_args()
-
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-
-    from hx_browser.config import settings_manager
-
-    port = args.port or settings_manager.load().api_port
-    print(f"\n  HX-Browser listening on http://{args.host}:{port}")
-    print(f"  API:    http://{args.host}:{port}/api/v1/status")
-    print(f"  Web UI: http://{args.host}:{port}/\n")
-    uvicorn.run("hx_browser.api:create_app", host=args.host, port=port, reload=args.reload, factory=True)
-
+from hx_browser.cli import main
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
