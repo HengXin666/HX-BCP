@@ -108,19 +108,19 @@
 
 ```bash
 # ① 协议层: 一次跑完全部档位 + 自动采本机真身基准 + 稳定性验证
-uv run probe.py protocol
+uv run hxfp protocol
 
 # 只跑指定档位
-uv run probe.py protocol --impersonate chrome,firefox,native
+uv run hxfp protocol --impersonate chrome,firefox,native
 
 # 手动给真身基准 (无 Chrome 时)
-uv run probe.py protocol --reference t13d1517h2_8daaf6152771_cb7bf5808d99
+uv run hxfp protocol --reference t13d1517h2_8daaf6152771_cb7bf5808d99
 
 # ② 浏览器层: 对任意 CDP 端点 (HX-Browser / CloakBrowser / 系统 Chrome / 无头)
-uv run probe.py browser --endpoint http://127.0.0.1:43020
+uv run hxfp browser --endpoint http://127.0.0.1:43020
 
 # ③ 跨层比对: 读最近两份报告出红黄绿
-uv run probe.py compare
+uv run hxfp compare
 ```
 
 退出码: `0` 全绿 / `1` 有红线 / `2` 材料不足。
@@ -143,9 +143,9 @@ uv run probe.py compare
 
 ```bash
 # 闸门用法: 起浏览器前后各跑一次, 红线即拦
-uv run probe.py protocol        || exit 1
-uv run probe.py browser --endpoint "$CDP" || exit 1
-uv run probe.py compare         || exit 1
+uv run hxfp protocol        || exit 1
+uv run hxfp browser --endpoint "$CDP" || exit 1
+uv run hxfp compare         || exit 1
 ```
 
 ## 已知边界
