@@ -54,6 +54,7 @@
       proxy: { type: "no_proxy", host: "", port: 0, username: "", password: "", ...(p.proxy || {}) },
       fingerprint: {
         browser: fp.browser || "sun", os: fp.os || "Windows",
+        kernel: fp.kernel || "",
         userAgent: fp.user_agent || "", language: fp.language || "",
         timezone: fp.timezone || "", resolution: fp.resolution || "1280x820",
         hardwareConcurrency: fp.hardware_concurrency || 0, deviceMemory: fp.device_memory || 0,
@@ -61,6 +62,7 @@
         canvasNoise: !!fp.canvas_noise, audioNoise: !!fp.audio_noise, webglNoise: !!fp.webgl_noise,
         webrtcMode: fp.webrtc_mode || "real", webrtcPublicIp: fp.webrtc_public_ip || "",
         ...FP_DEFAULTS,
+        deviceScaleFactor: fp.device_scale_factor || Number(FP_DEFAULTS.deviceScaleFactor) || 1,  // 放在 spread 后才能盖回真实值
       },
       launch: { urls: [], extraArgs: [], extensions: [], ...(p.launch || {}) },
       storage: { cloudSync: false, clearCacheAfterClose: false, ...(p.storage || {}) },
@@ -86,10 +88,12 @@
     };
     if (payload.fingerprint) out.fingerprint = {
       browser: fp.browser || "sun", os: fp.os, device_type: fp.deviceType,
+      kernel: fp.kernel || "",
       user_agent: fp.userAgent, language: fp.language, timezone: fp.timezone,
       resolution: fp.resolution, color_depth: fp.colorDepth,
       hardware_concurrency: fp.hardwareConcurrency, device_memory: fp.deviceMemory,
       webgl_vendor: fp.webglVendor, webgl_renderer: fp.webglRenderer,
+      device_scale_factor: fp.browser === "safari" ? Number(fp.deviceScaleFactor) || 0 : undefined,  // sun/flower 不送, 保持脚本按 1.0
       canvas_noise: fp.canvasNoise, audio_noise: fp.audioNoise, webgl_noise: fp.webglNoise,
       webrtc_mode: fp.webrtcMode || "real", webrtc_public_ip: fp.webrtcPublicIp || "",
       headless: !!fp.headless,
@@ -110,6 +114,8 @@
     return {
       ...s,
       sunBrowserPath: s.chromium_path || "", flowerBrowserPath: s.firefox_path || "",
+      safariBrowserPath: (s.kernel_paths && s.kernel_paths.safari) || "",
+      kernelPaths: { ...(s.kernel_paths || {}) },
       browserPath: s.chromium_path || "", baseDebugPort: s.cdp_base_port || 43000,
       defaultHomepage: s.default_homepage || "about:blank", localApiPort: 53225,
       closeWithTaskTree: true, profileRoot: "", kernelRoot: "",
@@ -123,6 +129,14 @@
     const out = {};
     if (s.sunBrowserPath !== undefined) out.chromium_path = s.sunBrowserPath;
     if (s.flowerBrowserPath !== undefined) out.firefox_path = s.flowerBrowserPath;
+    // kernel_paths 是 dict 且后端整字段覆盖: 带上完整 kernelPaths, 只改 safari; 空串=跟随自动探测, 不写键
+    if (s.safariBrowserPath !== undefined || s.kernelPaths !== undefined) {
+      const kp = { ...(s.kernelPaths || {}) };
+      const safari = s.safariBrowserPath ?? (s.kernelPaths?.safari ?? "");
+      delete kp.safari;
+      if (safari) kp.safari = safari;
+      out.kernel_paths = kp;
+    }
     if (s.baseDebugPort !== undefined) out.cdp_base_port = Number(s.baseDebugPort) || 43000;
     if (s.defaultHomepage !== undefined) out.default_homepage = s.defaultHomepage;
     if (s.localApiPort !== undefined) out.api_port = Number(s.localApiPort) || 8325;
@@ -161,6 +175,8 @@
       const groups = await req("GET", "/groups").catch(() => ({ groups: ["默认"] }));
       return { groups: groups.groups || ["默认"], profiles: (d.list || []).map(toUiProfile) };
     },
+    /* 已登录账号 (登录态批量扫描: 离线读 cookie 库 / 运行中走 CDP 明文) */
+    listLoginStates: async () => req("GET", "/environments/login-states"),
     createProfile: async (payload) => toUiProfile(await req("POST", "/environments", fromUiProfile(payload))),
     updateProfile: async (payload) => {
       const id = payload.id;

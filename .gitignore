@@ -15,3 +15,7 @@ build/
 *.tsbuildinfo
 
 packages/browser/data/account-packs/*.json
+
+# hark 秘书通道的临时工作区与备份
+.hark-task/
+.hark-bak/

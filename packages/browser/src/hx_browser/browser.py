@@ -32,7 +32,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import cdp, desktop, kernels, launch_hooks, relay, window, xvfb
+from . import cdp, desktop, kernels, launch_hooks, relay, webkit, window, xvfb
 
 # parse_cookies 是 api.py 的既有入口, 在这里再导出保持导入路径不变
 from .cookies import _inject_firefox_cookies, parse_cookies  # noqa: F401
@@ -139,7 +139,9 @@ class BrowserManager:
             # 启动视图: 语言/时区已替换为实际生效值, 代理 relay 已就绪 (见 launch_hooks)
             prep = await launch_hooks.prepare(env, profile_dir, plan, port)
             launch = prep.env
-            if kernels.family_of(env) == kernels.GECKO:
+            if kernels.family_of(launch) == kernels.WEBKIT:
+                pid, executable = await webkit.launch(launch, profile_dir, port, plan, self._spawn)
+            elif kernels.family_of(launch) == kernels.GECKO:
                 pid, executable = await self._launch_firefox(launch, port, profile_dir, plan)
             else:
                 pid, executable = await self._launch_chromium(launch, port, profile_dir, plan)
@@ -155,7 +157,7 @@ class BrowserManager:
             profile_dir=str(profile_dir),
             executable=executable,
             started_at=now_ms(),
-            cdp_http=f"http://127.0.0.1:{port}",
+            cdp_http=f"http://127.0.0.1:{port}" if kernels.speaks_cdp(launch) else "",
             visible=plan.visible,
             display=plan.display,
             xauth=plan.xauth,
@@ -259,6 +261,8 @@ class BrowserManager:
         )
 
     async def _post_start(self, env: Environment, info: RuntimeInfo) -> None:
+        if not kernels.speaks_cdp(env):  # WebKit 档不说 CDP: 无 Cookie 注入/登录态检查
+            return
         try:
             if env.fingerprint.browser == "flower":
                 # Firefox CDP 兼容性弱：Cookie 走 sqlite（启动前已注入，见 _inject_firefox_cookies）
@@ -412,7 +416,7 @@ class BrowserManager:
         return self._spawn(exe, args, env, plan)
 
     def _spawn(
-        self, exe: str, args: list[str], env: Environment, plan: desktop.DisplayPlan
+        self, exe: str, args: list[str], env: Environment, plan: desktop.DisplayPlan, extra_env: dict[str, str] | None = None
     ) -> tuple[int, str]:
         """起进程。显示环境由 plan **显式钉死** —— 不依赖继承来的环境。
 
@@ -425,6 +429,7 @@ class BrowserManager:
             launch_env[k] = v
         for k in plan.unset:
             launch_env.pop(k, None)
+        launch_env.update(extra_env or {})  # 族专属环境 (如 webkit.child_env 的 GDK_BACKEND=x11)
         if env.fingerprint.timezone:
             launch_env["TZ"] = env.fingerprint.timezone
         launch_env.update(launch_hooks.process_env(env))  # 托管语言时 LANG 与之对齐 (Intl locale)
@@ -471,7 +476,7 @@ class BrowserManager:
             _save_runtime()
             return False
         # 优先 CDP 优雅关闭
-        closed = await cdp.close_browser(info.debug_port, timeout=4)
+        closed = await cdp.close_browser(info.debug_port, timeout=4) if kernels.speaks_cdp(env) else False
         deadline = time.time() + timeout
         while time.time() < deadline:
             if not _pid_alive(info.pid):
