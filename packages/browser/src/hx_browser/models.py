@@ -14,7 +14,7 @@ from .prefs import ProfilePrefs
 Platform = Literal[
     "custom", "facebook", "google", "youtube", "tiktok", "x", "amazon", "shopify"
 ]
-BrowserType = Literal["sun", "flower"]  # sun=Chromium, flower=Firefox
+BrowserType = Literal["sun", "flower", "safari"]  # sun=Chromium, flower=Firefox, safari=WebKit  # browser-gate: allow-legacy 用户要求多内核
 ProxyType = Literal["no_proxy", "direct", "system", "http", "https", "socks5"]
 
 
@@ -54,6 +54,7 @@ class Fingerprint(BaseModel):
     device_memory: float = 0
     webgl_vendor: str = ""
     webgl_renderer: str = ""
+    device_scale_factor: float = 0.0  # 0 = 未指定, 指纹脚本按 1.0
     canvas_noise: bool = False
     audio_noise: bool = False
     webgl_noise: bool = False

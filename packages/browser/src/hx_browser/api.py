@@ -91,6 +91,7 @@ class SettingsUpdate(BaseModel):
     default_homepage: str | None = None
     auto_match_timezone: bool | None = None
     dark_mode: bool | None = None
+    kernel_paths: dict[str, str] | None = None
 
 
 @router.put("/settings")
