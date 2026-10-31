@@ -1,0 +1,615 @@
+{
+ "schema": 1,
+ "pr": 18,
+ "no": 1,
+ "recordedAt": "2026-10-31T08:38:14.667Z",
+ "commit": "c5e2315ef65161c1becd8fb56979b60b5af20573",
+ "rawBase": "https://raw.githubusercontent.com/HengXin666/HX-BCP/fingerprint-scorecard",
+ "svg": {
+  "overview": "1/all-kernels.svg",
+  "kernels": {
+   "brave": "1/kernel-brave.svg",
+   "chrome": "1/kernel-chrome.svg",
+   "chromium": "1/kernel-chromium.svg",
+   "cloak": "1/kernel-cloak.svg",
+   "edge": "1/kernel-edge.svg",
+   "firefox": "1/kernel-firefox.svg",
+   "librewolf": "1/kernel-librewolf.svg",
+   "safari": "1/kernel-safari.svg"
+  }
+ },
+ "kernels": [
+  {
+   "kernel": "brave",
+   "label": "brave",
+   "ua": "",
+   "capturedAt": "2026-10-31T08:35:04.538481+00:00",
+   "score": null,
+   "verdict": "incomplete",
+   "reason": "runner 上没有这个内核, 未安装",
+   "sites": [
+    {
+     "id": "creepjs",
+     "name": "CreepJS",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "sannysoft",
+     "name": "Sannysoft",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "iphey",
+     "name": "Iphey",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "browserscan",
+     "name": "BrowserScan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "pixelscan",
+     "name": "Pixelscan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "deviceinfo",
+     "name": "Device & Browser Info",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "browserleaks-webrtc",
+     "name": "BrowserLeaks WebRTC",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "browserleaks-canvas",
+     "name": "BrowserLeaks Canvas",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "clearcote",
+     "name": "Clearcote",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    }
+   ]
+  },
+  {
+   "kernel": "chrome",
+   "label": "chrome",
+   "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+   "capturedAt": "2026-10-31T08:37:44.682733+00:00",
+   "score": 80.82857142857142,
+   "verdict": "block",
+   "reason": "",
+   "sites": [
+    {
+     "id": "creepjs",
+     "name": "CreepJS",
+     "verdict": "fail",
+     "score": 100,
+     "note": ""
+    },
+    {
+     "id": "sannysoft",
+     "name": "Sannysoft",
+     "verdict": "fail",
+     "score": 96.8,
+     "note": ""
+    },
+    {
+     "id": "iphey",
+     "name": "Iphey",
+     "verdict": "fail",
+     "score": 80,
+     "note": ""
+    },
+    {
+     "id": "browserscan",
+     "name": "BrowserScan",
+     "verdict": "pass",
+     "score": 90,
+     "note": ""
+    },
+    {
+     "id": "pixelscan",
+     "name": "Pixelscan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "打开了检测页，扫描没有完成"
+    },
+    {
+     "id": "deviceinfo",
+     "name": "Device & Browser Info",
+     "verdict": "fail",
+     "score": 0,
+     "note": ""
+    },
+    {
+     "id": "browserleaks-webrtc",
+     "name": "BrowserLeaks WebRTC",
+     "verdict": "pass",
+     "score": 100,
+     "note": ""
+    },
+    {
+     "id": "browserleaks-canvas",
+     "name": "BrowserLeaks Canvas",
+     "verdict": "record",
+     "score": null,
+     "note": "签名 95ECA66CB20E"
+    },
+    {
+     "id": "clearcote",
+     "name": "Clearcote",
+     "verdict": "pass",
+     "score": 99,
+     "note": ""
+    }
+   ]
+  },
+  {
+   "kernel": "chromium",
+   "label": "chromium",
+   "ua": "",
+   "capturedAt": "2026-10-31T08:35:35.204257+00:00",
+   "score": null,
+   "verdict": "incomplete",
+   "reason": "真实副本没起来, 未评分",
+   "sites": [
+    {
+     "id": "creepjs",
+     "name": "CreepJS",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "sannysoft",
+     "name": "Sannysoft",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "iphey",
+     "name": "Iphey",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "browserscan",
+     "name": "BrowserScan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "pixelscan",
+     "name": "Pixelscan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "deviceinfo",
+     "name": "Device & Browser Info",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "browserleaks-webrtc",
+     "name": "BrowserLeaks WebRTC",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "browserleaks-canvas",
+     "name": "BrowserLeaks Canvas",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "clearcote",
+     "name": "Clearcote",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    }
+   ]
+  },
+  {
+   "kernel": "cloak",
+   "label": "cloak",
+   "ua": "",
+   "capturedAt": "2026-10-31T08:35:06.236292+00:00",
+   "score": null,
+   "verdict": "incomplete",
+   "reason": "runner 上没有这个内核, 未安装",
+   "sites": [
+    {
+     "id": "creepjs",
+     "name": "CreepJS",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "sannysoft",
+     "name": "Sannysoft",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "iphey",
+     "name": "Iphey",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "browserscan",
+     "name": "BrowserScan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "pixelscan",
+     "name": "Pixelscan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "deviceinfo",
+     "name": "Device & Browser Info",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "browserleaks-webrtc",
+     "name": "BrowserLeaks WebRTC",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "browserleaks-canvas",
+     "name": "BrowserLeaks Canvas",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "clearcote",
+     "name": "Clearcote",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    }
+   ]
+  },
+  {
+   "kernel": "edge",
+   "label": "edge",
+   "ua": "",
+   "capturedAt": "2026-10-31T08:35:42.903248+00:00",
+   "score": null,
+   "verdict": "incomplete",
+   "reason": "真实副本没起来, 未评分",
+   "sites": [
+    {
+     "id": "creepjs",
+     "name": "CreepJS",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "sannysoft",
+     "name": "Sannysoft",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "iphey",
+     "name": "Iphey",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "browserscan",
+     "name": "BrowserScan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "pixelscan",
+     "name": "Pixelscan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "deviceinfo",
+     "name": "Device & Browser Info",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "browserleaks-webrtc",
+     "name": "BrowserLeaks WebRTC",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "browserleaks-canvas",
+     "name": "BrowserLeaks Canvas",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "clearcote",
+     "name": "Clearcote",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    }
+   ]
+  },
+  {
+   "kernel": "firefox",
+   "label": "firefox",
+   "ua": "",
+   "capturedAt": "2026-10-31T08:35:31.546248+00:00",
+   "score": null,
+   "verdict": "incomplete",
+   "reason": "真实副本没起来, 未评分",
+   "sites": [
+    {
+     "id": "creepjs",
+     "name": "CreepJS",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "sannysoft",
+     "name": "Sannysoft",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "iphey",
+     "name": "Iphey",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "browserscan",
+     "name": "BrowserScan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "pixelscan",
+     "name": "Pixelscan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "deviceinfo",
+     "name": "Device & Browser Info",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "browserleaks-webrtc",
+     "name": "BrowserLeaks WebRTC",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "browserleaks-canvas",
+     "name": "BrowserLeaks Canvas",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    },
+    {
+     "id": "clearcote",
+     "name": "Clearcote",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "真实副本没起来, 未评分"
+    }
+   ]
+  },
+  {
+   "kernel": "librewolf",
+   "label": "librewolf",
+   "ua": "",
+   "capturedAt": "2026-10-31T08:35:04.737541+00:00",
+   "score": null,
+   "verdict": "incomplete",
+   "reason": "runner 上没有这个内核, 未安装",
+   "sites": [
+    {
+     "id": "creepjs",
+     "name": "CreepJS",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "sannysoft",
+     "name": "Sannysoft",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "iphey",
+     "name": "Iphey",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "browserscan",
+     "name": "BrowserScan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "pixelscan",
+     "name": "Pixelscan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "deviceinfo",
+     "name": "Device & Browser Info",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "browserleaks-webrtc",
+     "name": "BrowserLeaks WebRTC",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "browserleaks-canvas",
+     "name": "BrowserLeaks Canvas",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    },
+    {
+     "id": "clearcote",
+     "name": "Clearcote",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "runner 上没有这个内核, 未安装"
+    }
+   ]
+  },
+  {
+   "kernel": "safari",
+   "label": "safari",
+   "ua": "",
+   "capturedAt": "2026-10-31T08:35:06.729184+00:00",
+   "score": null,
+   "verdict": "incomplete",
+   "reason": "该内核不说 CDP, 当前采集器取不到",
+   "sites": [
+    {
+     "id": "creepjs",
+     "name": "CreepJS",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "sannysoft",
+     "name": "Sannysoft",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "iphey",
+     "name": "Iphey",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "browserscan",
+     "name": "BrowserScan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "pixelscan",
+     "name": "Pixelscan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "deviceinfo",
+     "name": "Device & Browser Info",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "browserleaks-webrtc",
+     "name": "BrowserLeaks WebRTC",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "browserleaks-canvas",
+     "name": "BrowserLeaks Canvas",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "clearcote",
+     "name": "Clearcote",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    }
+   ]
+  }
+ ]
+}
