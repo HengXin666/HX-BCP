@@ -217,8 +217,70 @@ jobs:
         steps:
             - uses: actions/checkout@v4
             - uses: astral-sh/setup-uv@v4
-            - name: browser deps (fontconfig, chrome)
-              run: sudo apt-get update -qq && sudo apt-get install -y -qq fontconfig && (google-chrome-stable --version || echo "::warning::runner 上没有 google-chrome-stable")
+            - name: browser deps (fontconfig)
+              run: sudo apt-get update -qq && sudo apt-get install -y -qq fontconfig
+
+            # 只给当前内核装它自己的浏览器. 装不上不算失败: 后面的 real_profile.py
+            # 会探测不到可执行文件而返回 STATUS=not_installed, 记未测而不是 0 分.
+            - name: install kernel (${{ matrix.kernel }})
+              id: kernel
+              continue-on-error: true
+              env:
+                  KERNEL: ${{ matrix.kernel }}
+              run: |
+                  set +e
+                  case "$KERNEL" in
+                      chrome)
+                          which google-chrome-stable >/dev/null && echo "runner 自带 google-chrome-stable" ;;
+                      chromium)
+                          sudo apt-get install -y -qq chromium-browser || sudo apt-get install -y -qq chromium ;;
+                      edge)
+                          curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+                              | gpg --dearmor | sudo tee /usr/share/keyrings/microsoft.gpg >/dev/null \
+                              && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/edge stable main" \
+                              | sudo tee /etc/apt/sources.list.d/microsoft-edge.list >/dev/null \
+                              && sudo apt-get update -qq && sudo apt-get install -y -qq microsoft-edge-stable ;;
+                      brave)
+                          sudo curl -fsSLo /usr/share/keyrings/brave-browser-archive-keyring.gpg \
+                              https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg \
+                              && echo "deb [signed-by=/usr/share/keyrings/brave-browser-archive-keyring.gpg] https://brave-browser-apt-release.s3.brave.com/ stable main" \
+                              | sudo tee /etc/apt/sources.list.d/brave-browser-release.list >/dev/null \
+                              && sudo apt-get update -qq && sudo apt-get install -y -qq brave-browser ;;
+                      librewolf)
+                          sudo apt-get install -y -qq extrepo \
+                              && sudo extrepo enable librewolf \
+                              && sudo apt-get update -qq && sudo apt-get install -y -qq librewolf ;;
+                      firefox)
+                          sudo apt-get install -y -qq firefox || true ;;
+                      cloak|safari)
+                          echo "内核 $KERNEL 不走包管理器" ;;
+                      *)
+                          echo "未知内核 $KERNEL" ;;
+                  esac
+                  exit 0
+
+            # 装没装上一眼可见: 每个内核打印自己的真实版本号, 拿不到就明确写没装上
+            - name: verify kernel (${{ matrix.kernel }})
+              env:
+                  KERNEL: ${{ matrix.kernel }}
+              run: |
+                  set +e
+                  case "$KERNEL" in
+                      chrome) BIN=google-chrome-stable ;;
+                      chromium) BIN=$(which chromium || which chromium-browser) ;;
+                      edge) BIN=microsoft-edge-stable ;;
+                      brave) BIN=brave-browser ;;
+                      librewolf) BIN=librewolf ;;
+                      firefox) BIN=firefox ;;
+                      *) BIN="" ;;
+                  esac
+                  if [ -n "$BIN" ] && command -v "$BIN" >/dev/null 2>&1; then
+                      echo "内核 $KERNEL 可用: $("$BIN" --version 2>&1 | head -n 1)"
+                  else
+                      echo "::warning::内核 $KERNEL 没有可执行文件, 这次会记为未测"
+                  fi
+                  exit 0
+
             - name: start real profile
               id: up
               working-directory: packages/browser
