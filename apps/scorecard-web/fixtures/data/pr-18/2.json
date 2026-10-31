@@ -1,0 +1,240 @@
+{
+ "schema": 1,
+ "pr": 18,
+ "no": 2,
+ "recordedAt": "2026-10-31T08:00:00Z",
+ "commit": "fixture",
+ "rawBase": "",
+ "svg": {
+  "overview": "2/all-kernels.svg",
+  "kernels": {
+   "chromium": "2/kernel-chromium.svg",
+   "firefox": "2/kernel-firefox.svg",
+   "safari": "2/kernel-safari.svg"
+  }
+ },
+ "kernels": [
+  {
+   "kernel": "chromium",
+   "label": "chromium",
+   "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+   "capturedAt": "2026-10-30T19:10:00+00:00",
+   "score": 94.625,
+   "verdict": "pass",
+   "reason": "",
+   "sites": [
+    {
+     "id": "creepjs",
+     "name": "CreepJS",
+     "verdict": "pass",
+     "score": 88,
+     "note": ""
+    },
+    {
+     "id": "sannysoft",
+     "name": "Sannysoft",
+     "verdict": "pass",
+     "score": 100,
+     "note": ""
+    },
+    {
+     "id": "iphey",
+     "name": "Iphey",
+     "verdict": "pass",
+     "score": 88,
+     "note": ""
+    },
+    {
+     "id": "browserscan",
+     "name": "BrowserScan",
+     "verdict": "pass",
+     "score": 90,
+     "note": ""
+    },
+    {
+     "id": "pixelscan",
+     "name": "Pixelscan",
+     "verdict": "pass",
+     "score": 100,
+     "note": ""
+    },
+    {
+     "id": "deviceinfo",
+     "name": "Device & Browser Info",
+     "verdict": "pass",
+     "score": 100,
+     "note": ""
+    },
+    {
+     "id": "browserleaks-webrtc",
+     "name": "BrowserLeaks WebRTC",
+     "verdict": "pass",
+     "score": 100,
+     "note": ""
+    },
+    {
+     "id": "browserleaks-canvas",
+     "name": "BrowserLeaks Canvas",
+     "verdict": "record",
+     "score": null,
+     "note": "签名 ABCDEF012345"
+    },
+    {
+     "id": "clearcote",
+     "name": "Clearcote",
+     "verdict": "pass",
+     "score": 91,
+     "note": ""
+    }
+   ]
+  },
+  {
+   "kernel": "firefox",
+   "label": "firefox",
+   "ua": "Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0",
+   "capturedAt": "2026-10-30T19:11:00+00:00",
+   "score": 49.375,
+   "verdict": "block",
+   "reason": "",
+   "sites": [
+    {
+     "id": "creepjs",
+     "name": "CreepJS",
+     "verdict": "fail",
+     "score": 0,
+     "note": ""
+    },
+    {
+     "id": "sannysoft",
+     "name": "Sannysoft",
+     "verdict": "fail",
+     "score": 90,
+     "note": ""
+    },
+    {
+     "id": "iphey",
+     "name": "Iphey",
+     "verdict": "fail",
+     "score": 40,
+     "note": ""
+    },
+    {
+     "id": "browserscan",
+     "name": "BrowserScan",
+     "verdict": "pass",
+     "score": 70,
+     "note": ""
+    },
+    {
+     "id": "pixelscan",
+     "name": "Pixelscan",
+     "verdict": "fail",
+     "score": 0,
+     "note": ""
+    },
+    {
+     "id": "deviceinfo",
+     "name": "Device & Browser Info",
+     "verdict": "pass",
+     "score": 100,
+     "note": ""
+    },
+    {
+     "id": "browserleaks-webrtc",
+     "name": "BrowserLeaks WebRTC",
+     "verdict": "fail",
+     "score": 0,
+     "note": ""
+    },
+    {
+     "id": "browserleaks-canvas",
+     "name": "BrowserLeaks Canvas",
+     "verdict": "record",
+     "score": null,
+     "note": "签名 0123456789AB"
+    },
+    {
+     "id": "clearcote",
+     "name": "Clearcote",
+     "verdict": "pass",
+     "score": 95,
+     "note": ""
+    }
+   ]
+  },
+  {
+   "kernel": "safari",
+   "label": "safari",
+   "ua": "",
+   "capturedAt": "2026-10-30T19:48:38.327453+00:00",
+   "score": null,
+   "verdict": "incomplete",
+   "reason": "该内核不说 CDP, 当前采集器取不到",
+   "sites": [
+    {
+     "id": "creepjs",
+     "name": "CreepJS",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "sannysoft",
+     "name": "Sannysoft",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "iphey",
+     "name": "Iphey",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "browserscan",
+     "name": "BrowserScan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "pixelscan",
+     "name": "Pixelscan",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "deviceinfo",
+     "name": "Device & Browser Info",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "browserleaks-webrtc",
+     "name": "BrowserLeaks WebRTC",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "browserleaks-canvas",
+     "name": "BrowserLeaks Canvas",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    },
+    {
+     "id": "clearcote",
+     "name": "Clearcote",
+     "verdict": "unmeasured",
+     "score": null,
+     "note": "该内核不说 CDP, 当前采集器取不到"
+    }
+   ]
+  }
+ ]
+}

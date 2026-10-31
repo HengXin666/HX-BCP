@@ -1,0 +1,15 @@
+{
+ "pr": 18,
+ "runs": [
+  {
+   "no": 2,
+   "recordedAt": "2026-10-31T08:00:00Z",
+   "commit": "fixture"
+  },
+  {
+   "no": 1,
+   "recordedAt": "2026-10-30T08:00:00Z",
+   "commit": "fixture"
+  }
+ ]
+}
