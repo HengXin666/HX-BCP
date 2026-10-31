@@ -32,6 +32,9 @@ SITES = [
 ]
 
 
+NO_CDP = "该内核不说 CDP, 当前采集器取不到"
+
+
 def capture_pages(context, browser_label: str) -> dict:
     visits = [_visit(context, site, browser_label) for site in SITES]
     return {
@@ -42,29 +45,53 @@ def capture_pages(context, browser_label: str) -> dict:
     }
 
 
+def unmeasured(browser_label: str, reason: str) -> dict:
+    """A capture with no visits and the reason every site stays unmeasured, no score is produced"""
+    return {
+        "capturedAt": datetime.now(timezone.utc).isoformat(),
+        "browser": browser_label,
+        "unmeasured": reason,
+        "visits": [],
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Capture public fingerprint-checker pages")
     parser.add_argument("--cdp", default="", help="hx-browser CDP endpoint, e.g. http://127.0.0.1:43000")
     parser.add_argument("--out", required=True, help="where to write the capture JSON")
+    parser.add_argument("--kernel", default="", help="hx-browser kernel id this capture belongs to")
+    parser.add_argument("--family", default="", help="kernel family, blink, gecko or webkit")
+    parser.add_argument("--unmeasured", default="", help="write an unmeasured capture with this reason, open nothing")
     args = parser.parse_args()
 
-    from playwright.sync_api import sync_playwright
-
     browser_label = "hx-browser-cdp" if args.cdp else "local-chromium"
-    with sync_playwright() as playwright:
-        if args.cdp:
-            browser = playwright.chromium.connect_over_cdp(args.cdp)
-            context = browser.contexts[0] if browser.contexts else browser.new_context()
-            own_browser = False
-        else:
-            browser = playwright.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-            context = browser.new_context(viewport={"width": 1280, "height": 900})
-            own_browser = True
-        payload = capture_pages(context, browser_label)
-        if own_browser:
-            browser.close()
+    if args.unmeasured or args.family == "webkit":
+        payload = unmeasured("not-captured", args.unmeasured or NO_CDP)
+    else:
+        payload = _capture(args.cdp, browser_label)
+    if args.kernel:
+        payload.update(kernel=args.kernel, family=args.family)
     Path(args.out).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"wrote {len(payload['visits'])} visits to {args.out} ({browser_label})")
+
+
+def _capture(cdp: str, browser_label: str) -> dict:
+    """Opens every checker in the CDP browser, or in local Chromium without cdp, a failed CDP attach is an unmeasured capture"""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        if cdp:
+            try:
+                browser = playwright.chromium.connect_over_cdp(cdp, timeout=30000)
+            except Exception as exc:  # noqa: BLE001
+                return unmeasured(browser_label, "CDP 连接失败, " + str(exc).splitlines()[0][:160])
+            context = browser.contexts[0] if browser.contexts else browser.new_context()
+            return capture_pages(context, browser_label)
+        browser = playwright.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+        context = browser.new_context(viewport={"width": 1280, "height": 900})
+        payload = capture_pages(context, browser_label)
+        browser.close()
+        return payload
 
 
 def _visit(context, site: dict, browser_label: str) -> dict:

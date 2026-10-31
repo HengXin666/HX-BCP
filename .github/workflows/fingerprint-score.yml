@@ -201,75 +201,100 @@ jobs:
                   if-no-files-found: warn
 
     sites:
-        name: 公开检测站评分 (只记录)
+        name: 公开检测站实采 (${{ matrix.kernel }}, 只记录)
         needs: gate-unit
         runs-on: ubuntu-latest
         timeout-minutes: 25
-        # 只有这一条 job 需要写: contents 推评分卡分支, pull-requests 贴评论
-        permissions:
-            contents: write
-            pull-requests: write
+        strategy:
+            fail-fast: false
+            matrix:
+                kernel: [cloak, chrome, chromium, edge, brave, firefox, librewolf, safari]
         steps:
             - uses: actions/checkout@v4
             - uses: astral-sh/setup-uv@v4
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: 22
             - name: browser deps (fontconfig, chrome)
-              run: |
-                  sudo apt-get update -qq && sudo apt-get install -y -qq fontconfig
-                  google-chrome-stable --version || echo "::warning::runner 上没有 google-chrome-stable"
-            # 评分对象必须是真实副本: 裸 Playwright Chromium 的分不是产品的分 (见 gate/README.md)
+              run: sudo apt-get update -qq && sudo apt-get install -y -qq fontconfig && (google-chrome-stable --version || echo "::warning::runner 上没有 google-chrome-stable")
             - name: start real profile
               id: up
               working-directory: packages/browser
               run: |
                   set +e
-                  uv run python gate/real_profile.py up --spawn
+                  uv run python gate/real_profile.py up --spawn --kernel "${{ matrix.kernel }}"
                   code=$?
-                  echo "up_exit=$code" >> "$GITHUB_OUTPUT"
-                  if [ "$code" != "0" ]; then
-                      echo "::warning::真实副本没拉起来 (exit $code), 本 job 记为未评分"
-                      tail -n 80 "$RUNNER_TEMP/hx-browser-api.log" || true
-                  fi
+                  [ "$code" = "0" ] || { echo "::warning::内核 ${{ matrix.kernel }} 没拉起来 (exit $code), 记为未安装或未评分"; tail -n 80 "$RUNNER_TEMP/hx-browser-api.log" || true; }
                   exit 0
             - name: capture checker pages
-              id: capture
-              if: steps.up.outputs.up_exit == '0'
-              continue-on-error: true
               working-directory: packages/browser
               env:
+                  KERNEL: ${{ matrix.kernel }}
+                  STATUS: ${{ steps.up.outputs.status }}
+                  FAMILY: ${{ steps.up.outputs.family }}
                   CDP: ${{ steps.up.outputs.cdp }}
-              run: uv run --with playwright python gate/probe.py --cdp "$CDP" --out "$RUNNER_TEMP/sites.json"
-            - name: score
-              if: steps.capture.outcome == 'success'
               run: |
                   set +e
-                  node --experimental-strip-types packages/browser/gate/score.ts --no-fail "$RUNNER_TEMP/sites.json" "$RUNNER_TEMP/scorecard.svg" | tee "$RUNNER_TEMP/score.txt"
+                  OUT="$RUNNER_TEMP/sites-$KERNEL.json"
+                  PROBE=(uv run --with playwright python gate/probe.py --kernel "$KERNEL" --family "$FAMILY" --out "$OUT")
+                  case "$STATUS" in
+                      ok) "${PROBE[@]}" --cdp "$CDP" || "${PROBE[@]}" --unmeasured "采集器异常退出, 未评分" ;;
+                      no_cdp) "${PROBE[@]}" --family webkit ;;
+                      not_installed) "${PROBE[@]}" --unmeasured "runner 上没有这个内核, 未安装" ;;
+                      *) "${PROBE[@]}" --unmeasured "真实副本没起来, 未评分" ;;
+                  esac
                   exit 0
             - name: stop real profile
               if: always()
               working-directory: packages/browser
               run: uv run python gate/real_profile.py down
-            - name: capture unavailable
-              if: steps.up.outputs.up_exit != '0' || steps.capture.outcome != 'success'
-              run: echo "::warning::检测站实采未能运行 (真实副本没起来或站点全挂), 视为未评分而不是失败"
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: sites-${{ matrix.kernel }}
+                  path: |
+                      ${{ runner.temp }}/sites-${{ matrix.kernel }}.json
+                      ${{ runner.temp }}/hx-browser-api.log
+                  if-no-files-found: warn
+
+    sites-report:
+        name: 公开检测站评分卡 (按内核出图, 只记录)
+        needs: sites
+        if: always()
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: write
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - uses: actions/download-artifact@v4
+              continue-on-error: true
+              with:
+                  pattern: sites-*
+                  path: ${{ runner.temp }}/captures
+                  merge-multiple: true
+            - name: score every kernel
+              run: |
+                  set +e
+                  node --experimental-strip-types packages/browser/gate/score.ts --bundle "$RUNNER_TEMP/kernels.json" \
+                      --expect cloak,chrome,chromium,edge,brave,firefox,librewolf,safari "$RUNNER_TEMP"/captures/sites-*.json
+                  node --experimental-strip-types packages/browser/gate/score.ts --no-fail "$RUNNER_TEMP/kernels.json" "$RUNNER_TEMP/scorecards" | tee "$RUNNER_TEMP/score.txt"
+                  exit 0
             - uses: actions/upload-artifact@v4
               if: always()
               with:
                   name: fingerprint-sites
                   path: |
-                      ${{ runner.temp }}/sites.json
-                      ${{ runner.temp }}/scorecard.svg
+                      ${{ runner.temp }}/kernels.json
+                      ${{ runner.temp }}/scorecards
                       ${{ runner.temp }}/score.txt
-                      ${{ runner.temp }}/hx-browser-api.log
                   if-no-files-found: warn
-            - name: publish scorecard
-              # 只记录: 发不出去 (例如 fork PR 只读 token) 不能把 job 弄红
+            - name: publish scorecards
+              # 只记录, 发不出去 (例如 fork PR 只读 token) 不能把 job 弄红
               continue-on-error: true
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  SVG: ${{ runner.temp }}/scorecard.svg
+                  SVG_DIR: ${{ runner.temp }}/scorecards
                   TXT: ${{ runner.temp }}/score.txt
                   PR: ${{ github.event.pull_request.number }}
               run: bash scripts/publish-scorecard.sh

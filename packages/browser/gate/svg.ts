@@ -1,13 +1,13 @@
 import type { SiteReport, SiteResult, Verdict } from "./types.ts";
 import { GATE_MIN } from "./types.ts";
 
-const INK = "#1b1814";
-const MUTED = "#6e675e";
-const LINE = "#e2dcd0";
-const PAPER = "#fffdf8";
-const PASS = "#1e6b45";
-const WARN = "#8d5a12";
-const FAIL = "#9d2c2c";
+export const INK = "#1b1814";
+export const MUTED = "#6e675e";
+export const LINE = "#e2dcd0";
+export const PAPER = "#fffdf8";
+export const PASS = "#1e6b45";
+export const WARN = "#8d5a12";
+export const FAIL = "#9d2c2c";
 
 export function scorecardSvg(report: SiteReport): string {
   const width = 880;
@@ -34,7 +34,7 @@ export function scorecardSvg(report: SiteReport): string {
   ].join("");
 }
 
-function row(result: SiteResult, y: number): string {
+export function row(result: SiteResult, y: number): string {
   const color = result.verdict === "pass" ? PASS : result.kind === "miss" || result.kind === "record" ? WARN : FAIL;
   const ratio = result.score === null ? 0 : Math.max(0, Math.min(100, result.score)) / 100;
   const value = result.score === null ? (result.kind === "record" ? "记录" : "未测") : formatScore(result.score);
@@ -49,7 +49,7 @@ function row(result: SiteResult, y: number): string {
   ].join("");
 }
 
-function text(x: number, y: number, value: string, size: number, fill: string, anchor: "start" | "end" = "start"): string {
+export function text(x: number, y: number, value: string, size: number, fill: string, anchor: "start" | "middle" | "end" = "start"): string {
   const align = anchor === "start" ? "" : ` text-anchor="${anchor}"`;
   return `<text x="${x}" y="${y}" fill="${fill}" font-size="${size}" font-family="IBM Plex Sans, Noto Sans SC, Source Han Sans SC, sans-serif"${align}>${escapeXml(value)}</text>`;
 }
@@ -58,7 +58,7 @@ function escapeXml(value: string): string {
   return value.replaceAll("&", "&" + "amp;").replaceAll("<", "&" + "lt;").replaceAll(">", "&" + "gt;").replaceAll('"', "&" + "quot;");
 }
 
-function clip(value: string, max: number): string {
+export function clip(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 

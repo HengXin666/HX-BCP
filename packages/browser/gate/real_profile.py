@@ -28,10 +28,14 @@ from pathlib import Path
 
 PKG = Path(__file__).resolve().parent.parent
 ENV_NAME = "ci-fingerprint-score"
+WEBKIT_KERNELS = ("safari",)  # browser-gate: allow-legacy kernel id, webkit family, see hx_browser kernels on the PR 18 line
 DEFAULT_PORT = 8325
 TMP = Path(os.environ.get("RUNNER_TEMP", "/tmp"))
 STATE = TMP / "hx-real-profile.json"
 UNSCORED = 3
+NOT_INSTALLED = 4
+NO_CDP = 5
+STATUS = {0: "ok", UNSCORED: "unscored", NOT_INSTALLED: "not_installed", NO_CDP: "no_cdp"}
 FINGERPRINT = {
     "headless": True,
     "language": "en-US,en",
@@ -61,16 +65,15 @@ def local(port: int) -> str:
 
 def chrome_ua(version_text: str) -> str:
     """由 chrome --version 拼一个非 Headless 的 UA; 认不出主版本就返回空串, 不瞎编。"""
-    m = re.search(r"(\d+)\.\d+", version_text or "")
+    m = re.search(r"(\d+)\.\d+\.\d+\.\d+", version_text or "")
     return UA_TEMPLATE % m.group(1) if m else ""
 
 
-def detect_ua(api: str) -> str:
+def detect_ua(api: str, exe: str = "") -> str:
     """headless 默认 UA 带 HeadlessChrome, Sannysoft / CreepJS 一眼认出; 换成同版本的正常 UA。"""
-    exe = ""
     try:
         settings = call(api, "GET", "/settings") or {}
-        exe = settings.get("chromium_path") or (settings.get("settings") or {}).get("chromium_path") or ""
+        exe = exe or settings.get("chromium_path") or (settings.get("settings") or {}).get("chromium_path") or ""
     except (OSError, ValueError, RuntimeError, AttributeError):
         pass
     exe = exe or next((p for p in map(shutil.which, CHROME_FALLBACK) if p), "")
@@ -83,12 +86,40 @@ def detect_ua(api: str) -> str:
     return chrome_ua(res.stdout)
 
 
-def profile_fingerprint(api: str) -> dict:
+def profile_fingerprint(api: str, kernel: dict | None = None) -> dict:
+    """Fingerprint body for the env, a kernel row sets kernel and browser, only blink kernels get the Chrome UA override"""
     fp = dict(FINGERPRINT)
-    ua = detect_ua(api)
+    family = (kernel or {}).get("family", "blink")
+    if kernel:
+        fp["kernel"] = kernel["id"]
+        fp["browser"] = "flower" if family == "gecko" else "sun"
+    ua = detect_ua(api, (kernel or {}).get("path", "")) if family == "blink" else ""
     if ua:
         fp["user_agent"] = ua
     return fp
+
+
+def env_name(kernel: str) -> str:
+    """Env name for a kernel, no kernel keeps the old single env name"""
+    return "%s-%s" % (ENV_NAME, kernel) if kernel else ENV_NAME
+
+
+def kernel_row(api: str, kernel: str) -> dict | None:
+    """The kernel as the running API lists it, id, family, path and available, None when it is not listed"""
+    rows = (call(api, "GET", "/kernels") or {}).get("kernels", [])
+    return next((r for r in rows or [] if isinstance(r, dict) and r.get("id") == kernel), None)
+
+
+def emit(code: int, kernel: str, family: str, cdp: str = "") -> int:
+    """Prints and writes to GITHUB_OUTPUT the status, kernel and family of this up, returns code"""
+    print("STATUS=%s KERNEL=%s FAMILY=%s" % (STATUS[code], kernel or "-", family or "-"))
+    gh = os.environ.get("GITHUB_OUTPUT")
+    if gh:
+        with open(gh, "a", encoding="utf-8") as fh:
+            fh.write("status=%s\nkernel=%s\nfamily=%s\n" % (STATUS[code], kernel, family))
+            if cdp:
+                fh.write("cdp=%s\n" % cdp)
+    return code
 
 
 def stop_group(pid: int, grace: float = 10) -> None:
@@ -150,12 +181,12 @@ def wait_cdp(cdp: str, seconds: float) -> bool:
     return False
 
 
-def find_env(api: str) -> str | None:
+def find_env(api: str, name: str = ENV_NAME) -> str | None:
     envs = call(api, "GET", "/environments")
     if isinstance(envs, dict):
         envs = envs.get("items") or envs.get("environments") or []
     for env in envs or []:
-        if isinstance(env, dict) and env.get("name") == ENV_NAME:
+        if isinstance(env, dict) and env.get("name") == name:
             return env.get("id")
     return None
 
@@ -185,14 +216,31 @@ def up(args: argparse.Namespace) -> int:
         )
         pid = proc.pid
     save(api=api, pid=pid)
+    kernel = args.kernel.strip().lower()
+    family = "webkit" if kernel in WEBKIT_KERNELS else ""
     if not wait_api(api, args.wait, proc):
         print("hx-browser API 没有起来: %s" % api, file=sys.stderr)
         if proc is not None and proc.poll() is not None:
             print("API 进程已退出 (exit %s), 见 hx-browser-api.log" % proc.returncode, file=sys.stderr)
-        return UNSCORED
+        return emit(UNSCORED, kernel, family)
+    row = None
+    if kernel:
+        try:
+            row = kernel_row(api, kernel)
+        except (OSError, ValueError, RuntimeError) as exc:
+            print("读内核列表失败: %s" % exc, file=sys.stderr)
+            return emit(UNSCORED, kernel, family)
+        family = (row or {}).get("family") or family
+        if family == "webkit":
+            print("内核 %s 属 webkit 族, 不说 CDP, 不起副本" % kernel, file=sys.stderr)
+            return emit(NO_CDP, kernel, family)
+        if row is None or not row.get("available"):
+            print("内核 %s 未安装: %s" % (kernel, json.dumps(row, ensure_ascii=False)), file=sys.stderr)
+            return emit(NOT_INSTALLED, kernel, family)
+    name = env_name(kernel)
     try:
-        body = {"name": ENV_NAME, "fingerprint": profile_fingerprint(api), "prefs": PREFS}
-        env_id = find_env(api)
+        body = {"name": name, "fingerprint": profile_fingerprint(api, row), "prefs": PREFS}
+        env_id = find_env(api, name)
         if env_id:
             try:  # 按名复用时把配置刷成本脚本的版本, 免得旧副本带旧设置被评分
                 call(api, "PUT", "/environments/%s" % env_id, body)
@@ -201,25 +249,22 @@ def up(args: argparse.Namespace) -> int:
         else:
             env_id = call(api, "POST", "/environments", body)["id"]
         save(api=api, pid=pid, env=env_id)
+        print("ENV=%s NAME=%s" % (env_id, name))
         started = call(api, "POST", "/environments/%s/start" % env_id, timeout=180)
     except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
         print("真实副本启动失败: %s" % exc, file=sys.stderr)
-        return UNSCORED
+        return emit(UNSCORED, kernel, family)
     rt = started.get("runtime") or {}
     cdp = rt.get("cdp_http") or (local(rt["debug_port"]) if rt.get("debug_port") else "")
     save(api=api, pid=pid, env=env_id, cdp=cdp)
     if not cdp:
         print("启动返回里没有 CDP 端点: %s" % json.dumps(rt, ensure_ascii=False), file=sys.stderr)
-        return UNSCORED
+        return emit(UNSCORED, kernel, family)
     if not wait_cdp(cdp, 30):
         print("CDP 端点未就绪: %s" % cdp, file=sys.stderr)
-        return UNSCORED
+        return emit(UNSCORED, kernel, family)
     print("CDP=" + cdp)
-    gh = os.environ.get("GITHUB_OUTPUT")
-    if gh:
-        with open(gh, "a", encoding="utf-8") as fh:
-            fh.write("cdp=%s\n" % cdp)
-    return 0
+    return emit(0, kernel, family, cdp)
 
 
 def down(_args: argparse.Namespace) -> int:
@@ -245,6 +290,7 @@ def main() -> None:
     p_up.add_argument("--api", default="", help="已在跑的 API 地址, 默认本机 %d 端口" % DEFAULT_PORT)
     p_up.add_argument("--port", type=int, default=DEFAULT_PORT, help="--spawn 时的 API 端口")
     p_up.add_argument("--wait", type=float, default=60, help="等 API 就绪的秒数")
+    p_up.add_argument("--kernel", default="", help="内核 id, 取自 API 的 /kernels, 空则沿用旧的单一环境")
     sub.add_parser("down", help="停止副本与由 up 拉起的 API")
     args = parser.parse_args()
     sys.exit(up(args) if args.cmd == "up" else down(args))
