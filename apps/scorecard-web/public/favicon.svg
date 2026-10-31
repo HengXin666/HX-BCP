@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="HX 指纹评分卡">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c2742"/>
+      <stop offset="1" stop-color="#0d1017"/>
+    </linearGradient>
+    <linearGradient id="fp" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#cfe0ff"/>
+      <stop offset="1" stop-color="#4f8cff"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <g fill="none" stroke="url(#fp)" stroke-linecap="round">
+    <path d="M13 40V33a19 19 0 0 1 38 0v7" stroke-width="3.4"/>
+    <path d="M20 42V33a12 12 0 0 1 24 0v9" stroke-width="3.4"/>
+    <path d="M27 44V33a5 5 0 0 1 10 0v11" stroke-width="3.4"/>
+  </g>
+</svg>

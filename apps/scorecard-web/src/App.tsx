@@ -2,7 +2,6 @@ import { Alert, AlertDescription, AlertTitle, PageHeader, Select, SelectContent,
 import { useEffect, useMemo, useState } from "react";
 import { CaseOverview } from "./components/CaseOverview";
 import { CompareView } from "./components/CompareView";
-import { KernelDetail } from "./components/KernelDetail";
 import { SvgLinks } from "./components/SvgLinks";
 import { CASE_NO, CASE_PR, casePage, loadCase, loadIndex } from "./lib/data.ts";
 import { compareCases } from "./lib/diff.ts";
@@ -24,7 +23,6 @@ export function App() {
 	const [no, setNo] = useState(CASE_NO);
 	const [data, setData] = useState<Loaded | null>(null);
 	const [error, setError] = useState("");
-	const [kernel, setKernel] = useState("");
 	useEffect(() => {
 		setData(null);
 		setError("");
@@ -70,7 +68,6 @@ export function App() {
 			</main>
 		);
 	}
-	const shown = data.current.kernels.find((item) => item.kernel === kernel) ?? data.current.kernels[0];
 	return (
 		<main className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
 			{header}
@@ -81,8 +78,7 @@ export function App() {
 					<TabsTrigger value="svg">图与链接</TabsTrigger>
 				</TabsList>
 				<TabsContent value="now" className="flex flex-col gap-4">
-					<CaseOverview record={data.current} selected={shown?.kernel ?? ""} onSelect={setKernel} />
-					{shown ? <KernelDetail kernel={shown} /> : null}
+					<CaseOverview record={data.current} />
 				</TabsContent>
 				<TabsContent value="compare">
 					<CompareView diff={diff} />

@@ -5,11 +5,11 @@ import type { CellVerdict, KernelRecord } from "../lib/record.ts";
 type BadgeVariant = NonNullable<BadgeProps["variant"]>;
 
 /** 站结论的中文名与徽章样式 */
-export const CELL: Record<CellVerdict, { text: string; variant: BadgeVariant }> = {
-	pass: { text: "过", variant: "success" },
-	fail: { text: "不过", variant: "destructive" },
-	unmeasured: { text: "未测", variant: "secondary" },
-	record: { text: "记录", variant: "outline" },
+export const CELL: Record<CellVerdict, { text: string; variant: BadgeVariant; bar: string }> = {
+	pass: { text: "过", variant: "success", bar: "bg-green-500" },
+	fail: { text: "不过", variant: "destructive", bar: "bg-red-500" },
+	unmeasured: { text: "未测", variant: "secondary", bar: "bg-neutral-400 dark:bg-neutral-600" },
+	record: { text: "记录", variant: "outline", bar: "bg-blue-500" },
 };
 
 /** 升降方向的中文名, 徽章样式与数字卡色调 */
