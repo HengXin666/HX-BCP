@@ -4,14 +4,18 @@ import type { CaseIndex, CaseRecord } from "./record.ts";
 export const CASE_PR = __CASE_PR__;
 export const CASE_NO = __CASE_NO__;
 
-/** 本页面的绝对 base, 由 Vite base 与当前域名拼成 */
-function pageBase(): URL {
+/** 本次测评的根地址, 末尾一定带斜杠; 子页面是它的下一级 */
+function caseBase(): URL {
 	return new URL(import.meta.env.BASE_URL, window.location.origin);
 }
 
-/** data 根目录, 默认是 /ci/case/<pr>/<no>/ 往上四级的 data/, 可用 VITE_DATA_ROOT 覆盖 */
+/**
+ * data 根目录。按 base 推算而不是按当前页面路径往回退:
+ * 子页面 /ci/case/18/1/now/ 往回退四级会落到 /HX-BCP/ci/data/ 取不到,
+ * 而 base 永远是 /ci/case/<pr>/<no>/, 从它退四级才稳定。可用 VITE_DATA_ROOT 覆盖。
+ */
 export function dataRoot(): URL {
-	return new URL(import.meta.env.VITE_DATA_ROOT || "../../../../data/", pageBase());
+	return new URL(import.meta.env.VITE_DATA_ROOT || "../../../../data/", caseBase());
 }
 
 /** 某个 PR 的数据目录 data/pr-<pr>/ */
@@ -19,9 +23,9 @@ export function prDir(pr: number): URL {
 	return new URL(`pr-${pr}/`, dataRoot());
 }
 
-/** 同一个 PR 第 no 次测评的页面地址 */
+/** 同一个 PR 第 no 次测评的总览地址, 也是同次其它页面的父路径 */
 export function casePage(no: number): string {
-	return new URL(`../${no}/`, pageBase()).href;
+	return new URL(`../${no}/`, caseBase()).href;
 }
 
 /** svg 在站点上的地址与可复制的 raw 地址, rawBase 为空时 raw 地址就用站点地址 */

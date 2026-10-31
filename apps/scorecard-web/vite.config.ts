@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { resolve } from "node:path";
 
 const POSITIVE = /^[1-9][0-9]*$/;
 const pr = process.env.SCORECARD_PR ?? "";
@@ -15,13 +16,26 @@ if (!root.startsWith("/") || !root.endsWith("/")) {
 	throw new Error(`SCORECARD_ROOT 必须形如 /<repo>/, 拿到 ${root || "空"}`);
 }
 
-/** 评分卡页面: 每个 PR 的每次测评一个深路径, base 决定产物里所有资源的前缀. */
+const page = (name: string) => resolve(__dirname, name, "index.html");
+
+/** 每个页面独立入口, 各自是目录下的 index.html, 静态托管不需要 SPA 回退. */
 export default defineConfig({
 	base: `${root}ci/case/${pr}/${no}/`,
 	plugins: [react(), tailwindcss()],
 	define: {
 		__CASE_PR__: JSON.stringify(Number(pr)),
 		__CASE_NO__: JSON.stringify(Number(no)),
+	},
+	build: {
+		rollupOptions: {
+			input: {
+				overview: page("."),
+				now: page("now"),
+				compare: page("compare"),
+				kernel: page("kernel"),
+				artifacts: page("artifacts"),
+			},
+		},
 	},
 	server: { port: 8941, host: "127.0.0.1" },
 });
