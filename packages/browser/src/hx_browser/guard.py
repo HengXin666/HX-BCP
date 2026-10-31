@@ -106,7 +106,12 @@ def stop_auth_injector(env_id: str) -> None:
 
 
 async def inject_fingerprint(
-    env: Environment, debug_port: int, dark: bool = False, rounds: int = 24, profile_dir: Path | None = None
+    env: Environment,
+    debug_port: int,
+    dark: bool = False,
+    rounds: int = 24,
+    profile_dir: Path | None = None,
+    exe: str = "",
 ) -> None:
     """经 CDP 把指纹脚本注进**主世界**。
 
@@ -193,7 +198,21 @@ def webgl_pair(env: Environment) -> tuple[str, str]:
     return pool[int(hashlib.sha256(env.id.encode()).hexdigest()[:8], 16) % len(pool)]
 
 
-def _fp_json_for(env: Environment, dark: bool, profile_dir: Path | None = None) -> dict:
+def default_dpr(os_name: str, width: int) -> float:
+    """按 os 与屏宽给一个像真机的缩放: macOS 走 Retina, 高分屏不会是 1;
+    Windows/Linux 常见 1, 大屏可能是 1.25/1.5. 恒为 1 本身就是可聚类特征"""
+    if os_name == "macOS":
+        return 2.0 if width >= 1920 else 1.5
+    if width >= 2560:
+        return 1.5
+    if width >= 1920:
+        return 1.25
+    return 1.0
+
+
+def _fp_json_for(
+    env: Environment, dark: bool, profile_dir: Path | None = None, exe: str = ""
+) -> dict:
     """构造注入用的 FP 字典 —— 扩展路径与 CDP 路径共用同一份定义 (单一真源)。"""
     from .cloak import seed_for  # 局部导入, 与 build_fingerprint_extension 同一个 seed 来源
 
@@ -204,7 +223,7 @@ def _fp_json_for(env: Environment, dark: bool, profile_dir: Path | None = None) 
     inner = getattr(fp, "_fp", None) or {}
     return {
         "dark_mode": bool(dark),
-        "user_agent": fp.user_agent or "",
+        "user_agent": effective_user_agent(env, exe),
         "app_version": inner.get("app_version", ""),
         "platform": platform_for(fp.os),
         "language": (fp.language or "en-US").split(",")[0],
@@ -216,7 +235,7 @@ def _fp_json_for(env: Environment, dark: bool, profile_dir: Path | None = None) 
         "width": width,
         "height": height,
         "color_depth": fp.color_depth or 24,
-        "pixel_ratio": inner.get("pixel_ratio", 1.0),
+        "pixel_ratio": inner.get("pixel_ratio") or default_dpr(fp.os, width),
         "orientation": inner.get("orientation", "landscape-primary"),
         "timezone_offset": None,
         "timezone_name": fp.timezone or "",
@@ -239,10 +258,12 @@ def _fp_json_for(env: Environment, dark: bool, profile_dir: Path | None = None) 
     }
 
 
-def fingerprint_script(env: Environment, dark: bool = False, profile_dir: Path | None = None) -> str:
+def fingerprint_script(
+    env: Environment, dark: bool = False, profile_dir: Path | None = None, exe: str = ""
+) -> str:
     """返回可直接注入主世界的指纹脚本 (FP_JSON 已代入)。"""
 
     # 两个占位符都要替换: 只换 FP_JSON 会让 %NOISE_JS% 原样留下, 整段脚本语法错误
     return _CONTENT_JS.replace("%NOISE_JS%", _noise_js()).replace(
-        "%FP_JSON%", json.dumps(_fp_json_for(env, dark, profile_dir))
+        "%FP_JSON%", json.dumps(_fp_json_for(env, dark, profile_dir, exe))
     )

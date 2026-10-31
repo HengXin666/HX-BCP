@@ -269,7 +269,11 @@ class BrowserManager:
                 # Chrome 136+ 收紧、154 移除 --load-extension, 扩展里的伪装全空转,
                 # 指纹只能走 CDP 主世界注入这条官方通道
                 await guard.inject_fingerprint(
-                    env, info.debug_port, dark=self._dark_enabled(env), profile_dir=self.env_profile_dir(env)
+                    env,
+                    info.debug_port,
+                    dark=self._dark_enabled(env),
+                    profile_dir=self.env_profile_dir(env),
+                    exe=info.executable,
                 )
                 cookies = parse_cookies(env.account.cookies)
                 if cookies:
