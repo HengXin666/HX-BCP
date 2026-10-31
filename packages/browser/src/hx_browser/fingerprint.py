@@ -377,6 +377,12 @@ def _noise_js() -> str:
     return ";(%s)(FP, window);" % NOISE_JS_FILE.read_text("utf-8").strip()
 
 
+def ua_for(os_name: str, major: str) -> str:
+    """按 os 与内核主版本拼 Chrome UA, 版本只留主版本 (Chrome UA 精简后的格式), 未知 os 按 Windows"""
+    plat = UA_PLATFORMS.get(os_name, UA_PLATFORMS["Windows"])["ua_platform"]
+    return f"Mozilla/5.0 ({plat}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{major}.0.0.0 Safari/537.36"
+
+
 def gen_random_fingerprint(browser: str = "sun", os_name: str | None = None, country: str | None = None) -> dict:
     """按平台随机生成一套自洽指纹。"""
     os_name = os_name or random.choice(OS_POOL)
@@ -384,11 +390,7 @@ def gen_random_fingerprint(browser: str = "sun", os_name: str | None = None, cou
     # 内核版本（真实探测）→ 构造一致的 UA / Client Hints
     kernel_major = _detect_kernel_major()
     chrome_ver = f"{kernel_major}.0.0.0" if kernel_major else "151.0.0.0"
-
-    if os_name == "macOS":
-        ua = f"Mozilla/5.0 ({os_cfg['ua_platform']}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_ver} Safari/537.36"
-    else:
-        ua = f"Mozilla/5.0 ({os_cfg['ua_platform']}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_ver} Safari/537.36"
+    ua = ua_for(os_name, kernel_major or "151")
 
     # 地区倾向：country 命中则用该地区时区/语言
     # country -> tz 的映射在 locale.py —— 那里是**唯一**定义处 (api.py 的 match_ip
@@ -483,43 +485,9 @@ def _brands_for(major: int) -> list[dict]:
 # ---------------- 扩展 / user.js ----------------
 def build_fingerprint_extension(env: Environment, profile_dir: Path, dark: bool = False) -> Path:
     """生成 MV3 指纹扩展目录，返回路径。"""
-    fp = env.fingerprint
-    resolution = parse_resolution(fp.resolution) or (1280, 820)
-    width, height = resolution
-    inner = getattr(fp, "_fp", None) or {}
-    fp_json = {
-        "dark_mode": bool(dark),
-        "user_agent": fp.user_agent or "",
-        "app_version": inner.get("app_version", ""),
-        "platform": platform_for(fp.os),
-        "language": (fp.language or "en-US").split(",")[0],
-        "languages": [x for x in (fp.language or "en-US,en").split(",") if x] or ["en-US", "en"],
-        "hardware_concurrency": fp.hardware_concurrency or 0,
-        "device_memory": fp.device_memory or 0,
-        "max_touch_points": 0 if fp.device_type == "desktop" else 5,
-        "width": width,
-        "height": height,
-        "color_depth": fp.color_depth or 24,
-        "pixel_ratio": inner.get("pixel_ratio", 1.0),
-        "orientation": inner.get("orientation", "landscape-primary"),
-        "timezone_offset": None,
-        "timezone_name": fp.timezone or "",
-        "canvas_noise": bool(fp.canvas_noise),
-        "audio_noise": bool(fp.audio_noise),
-        "webgl_noise": bool(fp.webgl_noise),
-        "webgl_vendor": fp.webgl_vendor or "",
-        "webgl_renderer": fp.webgl_renderer or "",
-        "webrtc_public_ip": fp.webrtc_public_ip or "",
-        "hide_webrtc": fp.webrtc_mode == "proxy",
-        "fake_media_devices": bool(inner.get("fake_media_devices", False)),
-        "do_not_track": inner.get("do_not_track"),
-        "notification_permission": inner.get("notification_permission", ""),
-        "client_hints_brands": inner.get("client_hints_brands", []),
-        "hint_platform": inner.get("hint_platform", "Windows"),
-        "hint_platform_version": inner.get("hint_platform_version", ""),
-        "hint_architecture": inner.get("hint_architecture", ""),
-        "ua_full_version": inner.get("ua_full_version", ""),
-    }
+    from .guard import _fp_json_for  # 局部导入: guard 依赖本模块, 字典只在 guard 定义一次
+
+    fp_json = _fp_json_for(env, dark, profile_dir)
     ext_dir = profile_dir / "fingerprint-extension"
     ext_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
@@ -540,9 +508,6 @@ def build_fingerprint_extension(env: Environment, profile_dir: Path, dark: bool 
         ],
     }
     (ext_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), "utf-8")
-    from .cloak import seed_for  # 局部导入, 避免循环依赖
-
-    fp_json["noise_seed"] = seed_for(env.id, profile_dir)
     content = _CONTENT_JS.replace("%NOISE_JS%", _noise_js()).replace("%FP_JSON%", json.dumps(fp_json))
     (ext_dir / "content.js").write_text(content, "utf-8")
     return ext_dir

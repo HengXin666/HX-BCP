@@ -269,7 +269,7 @@ class BrowserManager:
                 # Chrome 136+ 收紧、154 移除 --load-extension, 扩展里的伪装全空转,
                 # 指纹只能走 CDP 主世界注入这条官方通道
                 await guard.inject_fingerprint(
-                    env, info.debug_port, dark=self._dark_enabled(env)
+                    env, info.debug_port, dark=self._dark_enabled(env), profile_dir=self.env_profile_dir(env)
                 )
                 cookies = parse_cookies(env.account.cookies)
                 if cookies:
@@ -363,8 +363,9 @@ class BrowserManager:
             args.append("--force-dark-mode")
         res = fp.resolution or "1280x820"
         args.append(f"--window-size={res}")
-        if fp.user_agent:
-            args.append(f"--user-agent={fp.user_agent}")
+        ua = guard.effective_user_agent(env, exe)  # 不填时按内核版本补正常 UA, 否则无头默认带 HeadlessChrome
+        if ua:
+            args.append(f"--user-agent={ua}")
         if fp.language:
             args.append(f"--lang={fp.language.split(',')[0]}")
         if fp.webrtc_mode in ("proxy", "disable"):

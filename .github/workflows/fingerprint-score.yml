@@ -4,6 +4,7 @@ name: fingerprint-score
 # 1) gate-unit  门禁抽取器单测, 不开网站, 失败即阻断
 # 2) audit      fingerprint-audit 自检, 红 (2) 阻断, 黄 (1) 警告, 跑不起来记为未评分
 # 3) sites      公开检测站实采 + 评分卡, 只记录不阻断 (检测站与 runner 出口 IP 不受我们控制)
+# 4) independence 三个不同配置副本逐项比对, 可被关联或带 HeadlessChrome / SwiftShader 即阻断
 on:
     pull_request:
         paths:
@@ -234,4 +235,37 @@ jobs:
                       ${{ runner.temp }}/sites.json
                       ${{ runner.temp }}/scorecard.svg
                       ${{ runner.temp }}/score.txt
+                  if-no-files-found: warn
+
+    independence:
+        name: 多环境独立性 (真实 hx-browser 副本, 可关联或无头标记即阻断)
+        needs: gate-unit
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v4
+            - uses: astral-sh/setup-uv@v4
+            - name: browser deps (fontconfig, chrome)
+              run: |
+                  sudo apt-get update -qq && sudo apt-get install -y -qq fontconfig
+                  google-chrome-stable --version || echo "::warning::runner 上没有 google-chrome-stable"
+            - name: independence matrix (0 independent / 1 linkable or leak / 3 unscored)
+              working-directory: packages/browser
+              run: |
+                  set +e
+                  uv run python gate/independence.py --spawn --out "$RUNNER_TEMP/independence.json" | tee "$RUNNER_TEMP/independence.txt"
+                  code=${PIPESTATUS[0]}
+                  { echo "## 多环境独立性: exit $code (0 独立 / 1 可关联或泄露 / 3 未评分)"; sed 's/^/    /' "$RUNNER_TEMP/independence.txt"; } >> "$GITHUB_STEP_SUMMARY"
+                  case "$code" in
+                      0) ;;
+                      1) echo "::error::environments are linkable or leak HeadlessChrome / SwiftShader, blocking"; exit 1 ;;
+                      *) echo "::warning::independence gate did not run (exit $code), unscored"; tail -n 80 "$RUNNER_TEMP/hx-browser-api.log" || true ;;
+                  esac
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: fingerprint-independence
+                  path: |
+                      ${{ runner.temp }}/independence.*
+                      ${{ runner.temp }}/hx-browser-api.log
                   if-no-files-found: warn
