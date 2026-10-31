@@ -249,6 +249,10 @@ jobs:
               run: |
                   sudo apt-get update -qq && sudo apt-get install -y -qq fontconfig
                   google-chrome-stable --version || echo "::warning::runner 上没有 google-chrome-stable"
+            - name: os font sets (msttcorefonts gives the mac / windows sets something to isolate)
+              run: |
+                  echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
+                  sudo apt-get install -y -qq ttf-mscorefonts-installer fonts-liberation fonts-dejavu-core fonts-noto-core || echo "::warning::font packages missing, fonts may match across profiles"
             - name: independence matrix (0 independent / 1 linkable or leak / 3 unscored)
               working-directory: packages/browser
               run: |

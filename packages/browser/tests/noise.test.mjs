@@ -64,6 +64,12 @@ test("measureText: stable per seed, tiny shift, off is exact", () => {
   assert.ok(Math.abs(width(a) - 123.5) < 1e-3);
 });
 
+test("measureText: equal raw width stays equal across font strings (font probes keep working)", () => {
+  const a = realm(A);
+  const at = (font) => a("(() => { const c = new CanvasRenderingContext2D(); c.font = " + JSON.stringify(font) + "; return c.measureText('mmm').width; })()");
+  assert.equal(at('72px "Menlo",monospace'), at("72px monospace"));
+});
+
 test("webgl: only the requested range of UNSIGNED_BYTE RGBA reads changes", () => {
   const a = realm(A), plain = realm(A, false);
   const ga = gl(a);

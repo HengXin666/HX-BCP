@@ -1,4 +1,4 @@
-"""CDP 客户端（websockets 实现，不依赖 playwright）。"""
+"""CDP 客户端（websockets 实现, 不依赖 playwright）。"""
 
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ class CdpConnection:
 
 
 async def http_json(url: str, timeout: float = 5.0) -> Any:
-    """GET 一个 HTTP JSON（如 /json/version、/json）。"""
+    """GET 一个 HTTP JSON（如 /json/version//json）。"""
     loop = asyncio.get_running_loop()
 
     def _get():
@@ -130,6 +130,20 @@ async def _get_json_any(debug_port: int, path: str):
         except Exception as e:  # noqa: BLE001
             last = e
     raise last if last else RuntimeError("cdp unreachable")
+
+
+async def reachable_base(debug_port: int, timeout: float = 15.0) -> str:
+    """真正能连上的 CDP http 地址; 超时返回空串。"""
+    deadline = loop_now() + timeout
+    while loop_now() < deadline:
+        for base in _cdp_bases(debug_port):
+            try:
+                await http_json(base + "/json/version", 2)
+                return base
+            except Exception:  # noqa: BLE001
+                pass
+        await asyncio.sleep(0.3)
+    return ""
 
 
 async def get_browser_ws(debug_port: int, timeout: float = 8.0) -> str:
@@ -181,7 +195,7 @@ async def _open_blank(debug_port: int) -> None:
 
 
 async def set_cookies(debug_port: int, cookies: list[dict], timeout: float = 20.0) -> int:
-    """通过 page 级 CDP 注入 Cookie，返回注入条数。"""
+    """通过 page 级 CDP 注入 Cookie, 返回注入条数。"""
     page_ws = await find_page_ws(debug_port, timeout=timeout)
     conn = await CdpConnection(page_ws).connect(timeout=10)
     try:

@@ -1,4 +1,4 @@
-"""浏览器进程管理（对应 PRD F1/F6）：隔离启动、可见窗口、优雅停止。
+"""浏览器进程管理（对应 PRD F1/F6）：隔离启动/可见窗口/优雅停止。
 
 # Agent Note: .agents/notes/implemented/feature/2026-10-13-hxbrowser-visible-window-and-multi-instance.md
 
@@ -259,14 +259,15 @@ class BrowserManager:
         )
 
     async def _post_start(self, env: Environment, info: RuntimeInfo) -> None:
-        try:
+        try:  # cdp_http 改成真正在听的地址: Chrome 146 实测无视 --remote-debugging-address 只绑 [::1]
+            info.cdp_http = await cdp.reachable_base(info.debug_port) or info.cdp_http
             if env.fingerprint.browser == "flower":
-                # Firefox CDP 兼容性弱：Cookie 走 sqlite（启动前已注入，见 _inject_firefox_cookies）
+                # Firefox CDP 兼容性弱：Cookie 走 sqlite（启动前已注入, 见 _inject_firefox_cookies）
                 pass
             else:
                 if self._dark_enabled(env):
                     await self._apply_dark_mode_cdp(info.debug_port)
-                # Chrome 136+ 收紧、154 移除 --load-extension, 扩展里的伪装全空转,
+                # Chrome 136+ 收紧/154 移除 --load-extension, 扩展里的伪装全空转,
                 # 指纹只能走 CDP 主世界注入这条官方通道
                 await guard.inject_fingerprint(
                     env,
@@ -303,7 +304,7 @@ class BrowserManager:
             ws_url = await cdp.get_browser_ws(debug_port, timeout=6)
             conn = await cdp.CdpConnection(ws_url).connect(timeout=8)
             try:
-                # 找到首个 page target 做 emulation（Emulation 是 session 级，作用于 page）
+                # 找到首个 page target 做 emulation（Emulation 是 session 级, 作用于 page）
                 page_ws = await cdp.find_page_ws(debug_port, timeout=10)
                 conn2 = await cdp.CdpConnection(page_ws).connect(timeout=8)
                 try:
@@ -332,7 +333,7 @@ class BrowserManager:
         exe = kernels.resolve_executable(env, self.settings)
         if not exe or not Path(exe).exists():
             raise RuntimeError(
-                f"Chromium 可执行文件不存在: {exe or '(未配置)'}，请在设置中配置"
+                f"Chromium 可执行文件不存在: {exe or '(未配置)'}, 请在设置中配置"
             )
         fp = env.fingerprint
         args = [
@@ -396,9 +397,9 @@ class BrowserManager:
         exe = kernels.resolve_executable(env, self.settings)
         if not exe or not Path(exe).exists():
             raise RuntimeError(
-                f"Firefox 可执行文件不存在: {exe or '(未配置)'}，请在设置中配置"
+                f"Firefox 可执行文件不存在: {exe or '(未配置)'}, 请在设置中配置"
             )
-        # 导入的 profile（register 机 userdir）可能挂在子目录/软链，取实际位置
+        # 导入的 profile（register 机 userdir）可能挂在子目录/软链, 取实际位置
         profile_dir = effective_profile_dir(profile_dir)
         profile_dir.mkdir(parents=True, exist_ok=True)
         build_firefox_userjs(env, profile_dir, dark=self._dark_enabled(env))

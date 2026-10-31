@@ -115,7 +115,7 @@ async def inject_fingerprint(
 ) -> None:
     """经 CDP 把指纹脚本注进**主世界**。
 
-    Chrome 136+ 收紧、154 彻底移除 --load-extension ⇒ 扩展里的伪装全部空转
+    Chrome 136+ 收紧/154 彻底移除 --load-extension ⇒ 扩展里的伪装全部空转
     (实测四组开关组合, window.__hx_fp_injected__ 恒 false)。这里用官方通道补上:
       · Page.addScriptToEvaluateOnNewDocument —— 之后每个新文档在解析前就注入;
       · Runtime.evaluate                   —— 已经加载完的那一页立刻补一次。
@@ -125,9 +125,8 @@ async def inject_fingerprint(
     done: set[str] = set()
     for _ in range(rounds):
         try:
-            targets = await cdp.http_json(
-                "http://127.0.0.1:%d/json/list" % debug_port, 5
-            )
+            # 两个回环口都试: Chrome 146 实测忽略 --remote-debugging-address 只绑 [::1]
+            targets = await cdp._get_json_any(debug_port, "/json/list")
         except Exception:  # noqa: BLE001
             targets = []
         for t in targets or []:

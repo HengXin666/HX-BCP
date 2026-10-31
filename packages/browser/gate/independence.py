@@ -21,6 +21,7 @@ from itertools import combinations
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fontcheck import PROBE_FONTS, fc_fonts  # noqa: E402
 from real_profile import PKG, TMP, UNSCORED, call, local, stop_group, wait_api, wait_cdp  # noqa: E402
 
 FIELDS = ["ua", "platform", "cores", "memory", "screen", "dpr", "languages", "timezone", "canvas", "webgl", "fonts", "plugins"]
@@ -66,12 +67,11 @@ COLLECT_JS = r"""
     const d = g.getExtension('WEBGL_debug_renderer_info');
     out.webgl = g.getParameter(d.UNMASKED_VENDOR_WEBGL) + ' / ' + g.getParameter(d.UNMASKED_RENDERER_WEBGL);
   } catch (e) { out.webgl = 'error ' + e.message; }
-  const fonts = ['Arial', 'Helvetica Neue', 'Segoe UI', 'Calibri', 'Menlo', 'Monaco', 'Ubuntu', 'DejaVu Sans', 'Liberation Sans',
-    'Noto Sans CJK JP', 'Microsoft YaHei', 'PingFang SC', 'Courier New', 'Times New Roman', 'Verdana', 'Tahoma', 'Georgia', 'SF Pro Text'];
+  const fonts = %PROBE_FONTS%;
   const m = document.createElement('canvas').getContext('2d');
   const w = (f) => { m.font = '72px ' + f; return m.measureText('mmmmmmmmlli10OQ').width; };
-  const base = w('monospace');
-  out.fonts = fonts.filter(f => w('"' + f + '",monospace') !== base).join(',');
+  const bm = w('monospace'), bs = w('serif');
+  out.fonts = fonts.filter(f => w('"' + f + '",monospace') !== bm || w('"' + f + '",serif') !== bs).join(',');
   out.plugins = Array.from(navigator.plugins || []).map(p => p.name).join(',');
   return out;
 })()
@@ -137,7 +137,8 @@ def cdp_eval(cdp_http: str, url: str, timeout: float = 40) -> dict:
         while time.time() < end:
             send("Page.navigate", {"url": url})
             time.sleep(2)
-            res = send("Runtime.evaluate", {"expression": COLLECT_JS, "awaitPromise": True, "returnByValue": True})
+            js = COLLECT_JS.replace("%PROBE_FONTS%", json.dumps(PROBE_FONTS))
+            res = send("Runtime.evaluate", {"expression": js, "awaitPromise": True, "returnByValue": True})
             value = (res.get("result") or {}).get("value") or {}
             if value.get("injected"):
                 break
@@ -151,8 +152,9 @@ def env_body(cfg: dict, extra_args: list[str]) -> dict:
     return {"name": NAME_PREFIX + cfg["label"], "fingerprint": fp, "prefs": prefs, "launch": {"extra_args": extra_args}}
 
 
-def start_env(api: str, body: dict) -> tuple[str, str]:
-    """Creates or reuses the environment by name, refreshes its config, starts it, returns (env id, cdp url)."""
+def start_env(api: str, body: dict) -> tuple[str, str, dict]:
+    """Creates or reuses the environment by name, starts it, returns (env id, cdp url, runtime).
+    Tries both loopbacks: Chrome 146 ignored --remote-debugging-address and listened on [::1] only (2026-10-31)."""
     envs = call(api, "GET", "/environments")
     if isinstance(envs, dict):
         envs = envs.get("list") or envs.get("items") or envs.get("environments") or []
@@ -162,10 +164,14 @@ def start_env(api: str, body: dict) -> tuple[str, str]:
     else:
         env_id = call(api, "POST", "/environments", body)["id"]
     rt = (call(api, "POST", "/environments/%s/start" % env_id, timeout=180) or {}).get("runtime") or {}
-    cdp = rt.get("cdp_http") or (local(rt["debug_port"]) if rt.get("debug_port") else "")
-    if not cdp or not wait_cdp(cdp, 30):
-        raise RuntimeError("no CDP endpoint for %s: %s" % (body["name"], json.dumps(rt, ensure_ascii=False)))
-    return env_id, cdp
+    port = rt.get("debug_port")
+    bases = [b for b in (rt.get("cdp_http"), port and local(port), port and "http://[::1]:%d" % port) if b]
+    end = time.time() + 30
+    while time.time() < end:
+        cdp = next((b for b in dict.fromkeys(bases) if wait_cdp(b, 1)), "")
+        if cdp:
+            return env_id, cdp, rt
+    raise RuntimeError("no CDP endpoint for %s on %s" % (body["name"], ", ".join(bases)))
 
 
 def capture(args: argparse.Namespace, configs: list[dict]) -> list[dict]:
@@ -173,7 +179,7 @@ def capture(args: argparse.Namespace, configs: list[dict]) -> list[dict]:
     rows = []
     echo = Echo()
     for cfg in configs:
-        env_id, cdp = start_env(args.api, env_body(cfg, args.extra_arg))
+        env_id, cdp, rt = start_env(args.api, env_body(cfg, args.extra_arg))
         try:
             value = cdp_eval(cdp, echo.url(cfg["label"]))
         finally:
@@ -183,6 +189,8 @@ def capture(args: argparse.Namespace, configs: list[dict]) -> list[dict]:
         headers = echo.seen.get("/probe/" + cfg["label"], {})
         value["http_ua"] = headers.get("user-agent", "")
         value["ch_ua"] = headers.get("sec-ch-ua", "") + " platform=" + headers.get("sec-ch-ua-platform", "")
+        fc = fc_fonts(rt.get("profile_dir", ""))
+        value["fonts_fc"], value["fonts_expected"] = (None, None) if fc is None else (",".join(fc[0]), ",".join(fc[1]))
         rows.append({"label": cfg["label"], "config": cfg["fingerprint"], "seen": value})
     return rows
 
@@ -199,6 +207,8 @@ def compare(rows: list[dict], min_diff: int, must_differ: list[str]) -> dict:
     shared = [f for f in FIELDS if len({json.dumps(r["seen"].get(f)) for r in rows}) == 1] if len(rows) > 1 else []
     leaks = [{"label": r["label"], "field": f, "value": r["seen"].get(f)} for r in rows for f, mark in LEAKS.items()
              if mark in str(r["seen"].get(f) or "")]
+    leaks += [{"label": r["label"], "field": "fonts", "value": r["seen"]["fonts"]} for r in rows
+              if r["seen"].get("fonts_expected") is not None and r["seen"]["fonts_expected"] != r["seen"].get("fonts")]
     return {"pairs": pairs, "sharedByAll": shared, "leaks": leaks, "minDiff": min_diff, "mustDiffer": must_differ}
 
 
@@ -206,7 +216,7 @@ def print_report(rows: list[dict], result: dict) -> None:
     """Prints the per field values, the pair matrix and the linkable verdicts."""
     width = max(len(r["label"]) for r in rows)
     print("values seen by the page")
-    for f in FIELDS + ["brands", "http_ua", "ch_ua"]:
+    for f in FIELDS + ["fonts_fc", "fonts_expected", "brands", "http_ua", "ch_ua"]:
         for r in rows:
             print("  %-9s %-*s %s" % (f, width, r["label"], str(r["seen"].get(f))[:140]))
     print("pair matrix (fields that differ out of %d, min %d)" % (len(FIELDS), result["minDiff"]))
@@ -219,7 +229,8 @@ def print_report(rows: list[dict], result: dict) -> None:
         print("  " + r["label"].ljust(width) + "  " + "  ".join(cells))
     print("shared by all: " + (", ".join(result["sharedByAll"]) or "none"))
     for leak in result["leaks"]:
-        print("  LEAK %s %s contains %s" % (leak["label"], leak["field"], LEAKS[leak["field"]]))
+        print("  LEAK %s %s %s" % (leak["label"], leak["field"], "contains " + LEAKS[leak["field"]]
+                                   if leak["field"] in LEAKS else "differs from fc-list under its fonts.conf (Chrome equivalences applied)"))
     for p in result["pairs"]:
         tag = "LINKABLE" if p["linkable"] else "ok"
         print("  %s %s <-> %s diff=%d same=[%s]%s" % (tag, p["a"], p["b"], p["diff"], ", ".join(p["same"]),
