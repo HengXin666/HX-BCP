@@ -295,6 +295,7 @@ jobs:
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   SVG_DIR: ${{ runner.temp }}/scorecards
+                  BUNDLE: ${{ runner.temp }}/kernels.json
                   TXT: ${{ runner.temp }}/score.txt
                   PR: ${{ github.event.pull_request.number }}
               run: bash scripts/publish-scorecard.sh

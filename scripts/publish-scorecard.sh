@@ -87,6 +87,15 @@ if [ "$PUSHED" = "0" ]; then
     echo "::warning::评分卡没能全部推到 ${BRANCH} 分支 (可能缺 contents:write), 只写文字摘要"
 fi
 
+# 结构化记录: 交互页读 data/, 与图分开存. BUNDLE 缺失或 PR 未知时跳过, 不影响出图
+if [ -n "${BUNDLE:-}" ] && [ -s "$BUNDLE" ] && [ -n "$PR" ] && [ "$PUSHED" = "1" ]; then
+    if bash scripts/scorecard-record.sh "$BUNDLE" "$PR" "$SVG_DIR" "$REPO" "$BRANCH"; then
+        echo "已写 data/pr-${PR}"
+    else
+        echo "::warning::结构化记录没写成功, 交互页这次不会有数据"
+    fi
+fi
+
 # 代码块围栏单独存变量, 直接写反引号会被当成命令替换
 FENCE=$(printf '%s' '```')
 NL=$'\n'
