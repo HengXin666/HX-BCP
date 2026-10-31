@@ -19,6 +19,16 @@ export function pageHref(target: PageId, no: number): string {
 	return target === "overview" ? base : `${base}${target}/`;
 }
 
+/** 悬停时先取目标页要用的数据, 点下去时缓存已经热了 */
+function warm(target: PageId, no: number): void {
+	const base = casePage(no);
+	const href = target === "overview" ? base : `${base}${target}/`;
+	const link = document.createElement("link");
+	link.rel = "prefetch";
+	link.href = href;
+	document.head.appendChild(link);
+}
+
 /** 顶部的页面列表, 当前页高亮; 这些是真实链接, 刷新和直链都能用 */
 export function PageNav({ current, load }: { current: PageId; load: CaseLoad }) {
 	const items = useMemo(() => PAGES.map((page) => ({ ...page, href: pageHref(page.id, load.selected) })), [load.selected]);
@@ -29,6 +39,7 @@ export function PageNav({ current, load }: { current: PageId; load: CaseLoad }) 
 					key={page.id}
 					href={page.href}
 					aria-current={page.id === current ? "page" : undefined}
+					onMouseEnter={() => warm(page.id, load.selected)}
 					className={`rounded-lg px-3 py-1.5 text-sm transition-colors duration-150 ${
 						page.id === current ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/50"
 					}`}

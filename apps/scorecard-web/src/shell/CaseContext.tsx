@@ -1,6 +1,6 @@
 import { Alert, AlertDescription, AlertTitle, Spin } from "@hx/ui";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { CASE_NO, CASE_PR, loadCase, loadIndex } from "../lib/data.ts";
+import { CASE_NO, CASE_PR, loadCase, loadCaseWithIndex } from "../lib/data.ts";
 import { compareCases } from "../lib/diff.ts";
 import { type CaseIndex, type CaseRecord, previousNo } from "../lib/record.ts";
 
@@ -15,22 +15,32 @@ export type CaseLoad = {
 
 const Context = createContext<CaseLoad | null>(null);
 
+/** 已取到的数据放模块级, 同一标签页内再进来直接就有, 不必每页重走一次请求 */
+let memo: { index: CaseIndex; current: CaseRecord; previous: CaseRecord | null } | null = null;
+
 /** 所有页面共用的数据; 换一次测评就重新取数并重算对比 */
 export function CaseProvider({ children }: { children: ReactNode }) {
 	const [selected, setSelected] = useState(CASE_NO);
-	const [data, setData] = useState<{ index: CaseIndex; current: CaseRecord; previous: CaseRecord | null } | null>(null);
+	const [data, setData] = useState(memo);
 	const [error, setError] = useState("");
 	useEffect(() => {
-		setData(null);
+		if (memo) return;
+		let alive = true;
 		setError("");
-		loadIndex(CASE_PR)
-			.then(async (index) => {
-				const current = await loadCase(CASE_PR, selected);
+		loadCaseWithIndex(CASE_PR, selected)
+			.then(async ({ index, current }) => {
 				const prev = previousNo(index, selected);
 				const previous = prev === null ? null : await loadCase(CASE_PR, prev);
-				setData({ index, current, previous });
+				if (!alive) return;
+				memo = { index, current, previous };
+				setData(memo);
 			})
-			.catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
+			.catch((reason: unknown) => {
+				if (alive) setError(reason instanceof Error ? reason.message : String(reason));
+			});
+		return () => {
+			alive = false;
+		};
 	}, [selected]);
 	if (error) {
 		return (

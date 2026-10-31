@@ -35,11 +35,28 @@ export function svgUrls(record: CaseRecord, path: string): { view: string; raw: 
 	return { view, raw };
 }
 
-/** 取 JSON, 非 2xx 时抛出带地址与状态码的错误 */
+/** 同一次会话里重复要同一份数据不再发请求, 切页面不必重走一次往返 */
+const cache = new Map<string, Promise<unknown>>();
+
+/** 取 JSON, 非 2xx 时抛出带地址与状态码的错误; 命中缓存直接返回同一个 promise */
 async function getJson<T>(url: URL): Promise<T> {
-	const response = await fetch(url, { cache: "no-cache" });
-	if (!response.ok) throw new Error(`没取到 ${url.pathname}, HTTP ${response.status}`);
-	return (await response.json()) as T;
+	const key = url.href;
+	const hit = cache.get(key);
+	if (hit) return hit as Promise<T>;
+	const task = (async () => {
+		const response = await fetch(url);
+		if (!response.ok) throw new Error(`没取到 ${url.pathname}, HTTP ${response.status}`);
+		return (await response.json()) as T;
+	})();
+	cache.set(key, task);
+	task.catch(() => cache.delete(key));
+	return task;
+}
+
+/** 一次拿到 index 与指定那次测评, 两者并行而不是串行等两趟 */
+export async function loadCaseWithIndex(pr: number, no: number): Promise<{ index: CaseIndex; current: CaseRecord }> {
+	const [index, current] = await Promise.all([loadIndex(pr), loadCase(pr, no)]);
+	return { index, current };
 }
 
 /** 读 data/pr-<pr>/index.json */
