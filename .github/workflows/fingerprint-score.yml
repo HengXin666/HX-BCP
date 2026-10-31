@@ -18,6 +18,11 @@ on:
     schedule:
         - cron: "0 19 * * *" # 03:00 Asia/Shanghai
     workflow_dispatch:
+        inputs:
+            pr:
+                description: 把这次测评记到哪个 PR 号下 (留空只更新 latest 图, 不写 data)
+                required: false
+                default: ""
 
 permissions:
     contents: read
@@ -297,5 +302,5 @@ jobs:
                   SVG_DIR: ${{ runner.temp }}/scorecards
                   BUNDLE: ${{ runner.temp }}/kernels.json
                   TXT: ${{ runner.temp }}/score.txt
-                  PR: ${{ github.event.pull_request.number }}
+                  PR: ${{ github.event.pull_request.number || inputs.pr }}
               run: bash scripts/publish-scorecard.sh
