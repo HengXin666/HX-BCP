@@ -1,0 +1,92 @@
+name: scorecard-pages
+
+# 把评分卡的交互页发布到 GitHub Pages。
+#
+# 站点只有一份, 测评页只占 /ci/case/<pr>/<no>/ 一个子路径, 以后加产品目录页
+# 或文档页互不冲突。
+#
+# 数据与 SVG 存在 fingerprint-scorecard 分支的 data/ 下。页面运行时按
+# /ci/case/<pr>/<no>/ 往上四级去找 data/, 所以 data/ 必须一起进站点产物,
+# 这里把那条分支单独 checkout 到 data-src 再拷进 site/data/。
+on:
+    push:
+        branches: [ci/fingerprint-scorecard, main]
+        paths:
+            - "apps/scorecard-web/**"
+            - "scripts/scorecard-*.sh"
+            - ".github/workflows/scorecard-pages.yml"
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    pages: write
+    id-token: write
+
+concurrency:
+    group: scorecard-pages
+    cancel-in-progress: false
+
+jobs:
+    build:
+        name: 构建测评页
+        runs-on: ubuntu-latest
+        steps:
+            - name: app source
+              uses: actions/checkout@v4
+              with:
+                  path: app-src
+            # 数据分支可能还不存在 (第一次跑), 缺了就当没有测评, 只出入口页
+            - name: data source
+              continue-on-error: true
+              uses: actions/checkout@v4
+              with:
+                  ref: fingerprint-scorecard
+                  path: data-src
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 9
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - name: install
+              working-directory: app-src/apps/scorecard-web
+              run: pnpm install --frozen-lockfile
+            - name: list cases
+              id: cases
+              run: bash app-src/scripts/scorecard-cases.sh data-src/data "$RUNNER_TEMP/cases.txt"
+            - name: build every case
+              working-directory: app-src/apps/scorecard-web
+              run: |
+                  set -euo pipefail
+                  site="$GITHUB_WORKSPACE/site"
+                  while read -r PR NO; do
+                      [ -n "$PR" ] || continue
+                      echo "构建 PR #$PR 第 $NO 次"
+                      SCORECARD_PR="$PR" SCORECARD_NO="$NO" pnpm build
+                      mkdir -p "$site/ci/case/$PR/$NO"
+                      cp -r dist/. "$site/ci/case/$PR/$NO/"
+                  done < "$RUNNER_TEMP/cases.txt"
+            - name: copy data
+              run: |
+                  set -euo pipefail
+                  if [ -d data-src/data ]; then
+                      cp -r data-src/data "$GITHUB_WORKSPACE/site/data"
+                  else
+                      mkdir -p "$GITHUB_WORKSPACE/site/data"
+                  fi
+            - name: landing page
+              run: bash app-src/scripts/scorecard-landing.sh "$GITHUB_WORKSPACE/site"
+            - uses: actions/upload-pages-artifact@v3
+              with:
+                  path: site
+
+    deploy:
+        name: 发布 Pages
+        needs: build
+        runs-on: ubuntu-latest
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - id: deployment
+              uses: actions/deploy-pages@v4
