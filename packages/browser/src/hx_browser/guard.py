@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from . import cdp
-from .fingerprint import _CONTENT_JS, parse_resolution, platform_for
+from .fingerprint import _CONTENT_JS, _noise_js, parse_resolution, platform_for
 from .models import Environment
 
 log = logging.getLogger(__name__)
@@ -204,4 +204,7 @@ def _fp_json_for(env: Environment, dark: bool) -> dict:
 def fingerprint_script(env: Environment, dark: bool = False) -> str:
     """返回可直接注入主世界的指纹脚本 (FP_JSON 已代入)。"""
 
-    return _CONTENT_JS.replace("%FP_JSON%", json.dumps(_fp_json_for(env, dark)))
+    # 两个占位符都要替换: 只换 FP_JSON 会让 %NOISE_JS% 原样留下, 整段脚本语法错误
+    return _CONTENT_JS.replace("%NOISE_JS%", _noise_js()).replace(
+        "%FP_JSON%", json.dumps(_fp_json_for(env, dark))
+    )

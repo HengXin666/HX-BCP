@@ -32,7 +32,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import cdp, desktop, kernels, launch_hooks, relay, window, xvfb
+from . import cdp, desktop, guard, kernels, launch_hooks, relay, window, xvfb
 
 # parse_cookies 是 api.py 的既有入口, 在这里再导出保持导入路径不变
 from .cookies import _inject_firefox_cookies, parse_cookies  # noqa: F401
@@ -266,6 +266,11 @@ class BrowserManager:
             else:
                 if self._dark_enabled(env):
                     await self._apply_dark_mode_cdp(info.debug_port)
+                # Chrome 136+ 收紧、154 移除 --load-extension, 扩展里的伪装全空转,
+                # 指纹只能走 CDP 主世界注入这条官方通道
+                await guard.inject_fingerprint(
+                    env, info.debug_port, dark=self._dark_enabled(env)
+                )
                 cookies = parse_cookies(env.account.cookies)
                 if cookies:
                     n = await cdp.set_cookies(info.debug_port, cookies)
