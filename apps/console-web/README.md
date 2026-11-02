@@ -16,10 +16,10 @@ HX-BCP 的控制台, React + TypeScript + @hx/ui. 两个页签: 浏览器 / 状�
 ## 入口
 
 - `src/main.tsx` -> `src/App.tsx` (AppFrame + Tabs 外壳, 挂 ConfirmDialogHost 与 Toaster)
-- `src/pages/BrowsersPage.tsx`: 树 + 面包屑 + 表 + 人类组操作
-- `src/pages/EnvTable.tsx`: DataTable, 状态点, 占用角标
-- `src/pages/EnvDialogs.tsx`: 新建 / 改名 / 移动浏览器与文件夹的对话框
-- `src/pages/StatusPage.tsx`: 缓存代理 + 指纹
+- `src/pages/browsers/BrowsersPage.tsx`: 树 + 面包屑 + 表 + 人类组操作
+- `src/pages/browsers/EnvTable.tsx`: DataTable, 状态点, 占用角标
+- `src/pages/browsers/EnvDialogs.tsx`: 新建 / 改名 / 移动浏览器与文件夹的对话框
+- `src/pages/system/SystemPage.tsx`: 状态 / 日志 / 孤儿进程 / 设置四个子页 (缓存代理 + 指纹在状态子页 StatusTab)
 - `src/pages/HumanGate.tsx`: 人类通道门, 未解锁时弹令牌框, 解锁后才渲染页签
 - `src/lib/api.ts`: 读接口与类型, 前缀 `API = /api/v1`, 每个请求带 `x-bcp-lane: human`
 - `src/lib/session.ts`: `/api/v1/lane/session` 查询 / 解锁 / 退出
