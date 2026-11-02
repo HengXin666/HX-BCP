@@ -1,10 +1,204 @@
 @import "tailwindcss";
 @import "@hx/ui/tokens.css";
 @import "@hx/ui/styles.css";
-@source "../../node_modules/@hx/ui/dist";
+@source "../node_modules/@hx/ui/dist";
+
+/*
+ * 字号刻度 (全站只有这六档, 代码里写 t-page / t-section / t-card / t-body / t-aux / t-micro, 不写 text-[..px]):
+ *   页面标题 20/600/28, 区块标题 15/600/22, 卡片标题 13/500/18, 正文 13/400/20, 辅助 12/400/16, 微标 11/500/14 大写加宽.
+ * 颜色另写 (辅助与微标通常配 text-muted-foreground). @hx/ui 内部用到的半像素档 (10.5, 11.5, 12.5) 在 :root 里并到相邻整档,
+ * 9 与 10 并到 11, 这样库组件 (表格, 徽标, 按钮) 也落在同一套刻度上.
+ * 间距只用 4 的倍数: 行内元素 gap-2 (8), 卡片内边距 p-4 (16), 卡片间距 gap-3 (12), 区块间距 gap-6 (24).
+ */
+@theme {
+	/* 库组件里的 Tailwind 档位也并进六档: xs=辅助 12/16, sm 与 base=正文 13/20, lg=区块 15/22, xl 与 2xl=页面 20/28. */
+	--text-xs: 12px;
+	--text-xs--line-height: 16px;
+	--text-sm: 13px;
+	--text-sm--line-height: 20px;
+	--text-base: 13px;
+	--text-base--line-height: 20px;
+	--text-lg: 15px;
+	--text-lg--line-height: 22px;
+	--text-xl: 20px;
+	--text-xl--line-height: 28px;
+	--text-2xl: 20px;
+	--text-2xl--line-height: 28px;
+}
+:root {
+	--fs-3xs: 11px;
+	--fs-2xs: 11px;
+	--fs-2xs-half: 11px;
+	--fs-xs-half: 12px;
+	--fs-sm-half: 13px;
+	--fs-base: 13px;
+	--fs-lg: 15px;
+	--fs-xl: 20px;
+	--fs-2xl: 20px;
+}
+/* 库组件里的半档间距并到 4 的倍数: px-2.5 (10) -> 8, gap-0.5 (2) -> 4, gap-1.5 (6) -> 8, gap-2.5 (10) -> 12. 不进 layer. */
+.px-2\.5 {
+	padding-inline: 8px;
+}
+.gap-0\.5 {
+	gap: 4px;
+}
+.gap-1\.5 {
+	gap: 8px;
+}
+.gap-2\.5 {
+	gap: 12px;
+}
+@utility t-page {
+	font-size: 20px;
+	font-weight: 600;
+	line-height: 28px;
+}
+@utility t-section {
+	font-size: 15px;
+	font-weight: 600;
+	line-height: 22px;
+}
+@utility t-card {
+	font-size: 13px;
+	font-weight: 500;
+	line-height: 18px;
+}
+@utility t-body {
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 20px;
+}
+@utility t-aux {
+	font-size: 12px;
+	line-height: 16px;
+}
+@utility t-micro {
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 14px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
 
 body {
 	margin: 0;
+	font-size: 13px;
+	line-height: 20px;
 	background: var(--background);
 	color: var(--foreground);
+}
+
+/*
+ * 浏览器表表头吸顶 (EnvTable 的 tableClassName). 普通 CSS, 不依赖 Tailwind 是否生成 sticky 类, 也不在 cascade layer 里,
+ * 所以压过任何工具类. 滚动祖先是视口: 表格外层没有 overflow 非 visible 的盒子.
+ */
+/*
+ * 表格不比容器宽: width/max-width 100%. 名称列用 w-full + max-w-0 吃剩余宽度并截断, 不再设 220px 下限
+ * (此前下限加各列取整后比容器多 1px, 页面横向溢出). 名称的可读宽度由 EnvTable 里次要列的容器查询阈值保证.
+ */
+table.env-table {
+	width: 100%;
+	max-width: 100%;
+}
+.env-table > thead,
+.env-table > thead > tr > th {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	background: var(--card);
+}
+
+/*
+ * 动效 (只用过渡与 @hx/ui 已带的关键帧, 不新写 @keyframes).
+ * 行: hover 与选中底色 150ms 过渡. 文件夹树: TreeNav 是平铺行, 展开时新出现的行走 tw-animate 的 enter 关键帧 (淡入并下移 4px).
+ * 侧栏分区的折叠由 @hx/ui CollapsibleContent 自带 hx-collapse-down / hx-collapse-up.
+ */
+.env-table > tbody > tr {
+	transition: background-color 150ms ease-out, box-shadow 150ms ease-out;
+}
+.env-table > tbody > tr > td {
+	transition: background-color 150ms ease-out;
+}
+[data-rail] [data-tree-index] {
+	--tw-enter-opacity: 0;
+	--tw-enter-translate-y: -4px;
+	animation: enter 150ms ease-out;
+}
+[data-facet-item] {
+	transition: background-color 150ms ease-out, color 150ms ease-out, border-color 150ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+	.env-table > tbody > tr,
+	.env-table > tbody > tr > td,
+	[data-facet-item] {
+		transition: none;
+	}
+	[data-rail] [data-tree-index] {
+		animation: none;
+	}
+}
+
+/*
+ * 焦点态: 键盘聚焦 (focus-visible) 的可交互元素一律 2px ring 色描边, 外移 2px. 鼠标点击不出现.
+ * 输入框, 下拉与多行文本由 @hx/ui 自带 ring, 不在这里叠加. 表格行可聚焦 (DataTable 给 tabIndex=0), Enter 打开详情.
+ */
+:where(button, a[href], summary, [role="tab"], [role="option"], [role="menuitem"], [role="checkbox"], [role="switch"], [tabindex]:not([tabindex="-1"]):not(input):not(textarea):not(select)):focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+}
+.env-table > tbody > tr:focus-visible {
+	outline-offset: -2px;
+}
+/* 输入框: 库只把边框换成 ring 色 (对比弱), 这里补同一道 2px 描边, 贴边不外移. */
+:where(input:not([type="checkbox"]):not([type="radio"]), textarea, select):focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 0;
+}
+
+
+/*
+ * 所有 DataTable (浏览器表, 代理, 扩展, 模板, 孤儿进程): 行高 40px, 单元格上下不留内边距, 左右 8px;
+ * 表头 11px 大写加宽 muted. 库默认是 py-1.5 / py-2 (6px / 8px, 行高随内容浮动), 这里统一掉.
+ */
+table.border-collapse > tbody > tr > td,
+table.border-collapse > thead > tr > th {
+	height: 40px;
+	padding-top: 0;
+	padding-bottom: 0;
+	padding-left: 8px;
+	padding-right: 8px;
+}
+table.border-collapse > thead > tr > th {
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 14px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--muted-foreground);
+}
+table.border-collapse > tbody > tr > td {
+	font-size: 13px;
+	line-height: 20px;
+}
+/* 数字列 (DataTable numeric: 次数, 条数, PID) 右对齐由库给出, 这里补等宽字体, 上下行的位数对齐. */
+table.border-collapse > tbody > tr > td.tabular-nums {
+	font-family: var(--font-mono);
+}
+/*
+ * @hx/ui 组件内部写死的任意字号 (text-[9px] ... text-[14px]) 也并进六档, 不改库源码:
+ * 9/10/10.5 -> 11, 11.5 -> 12, 12.5/13.5/14 -> 13. 不进 layer, 优先级高于库的 utilities.
+ */
+.text-\[9px\],
+.text-\[10px\],
+.text-\[10\.5px\] {
+	font-size: 11px;
+}
+.text-\[11\.5px\] {
+	font-size: 12px;
+}
+.text-\[12\.5px\],
+.text-\[13\.5px\],
+.text-\[14px\] {
+	font-size: 13px;
 }
