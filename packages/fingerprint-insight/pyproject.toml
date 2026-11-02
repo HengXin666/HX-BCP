@@ -1,6 +1,6 @@
 [project]
 name = "fp-insight"
-version = "0.1.0"
+version = "0.2.0"
 description = "浏览器指纹探测工具: Hook 全部指纹 API, 实时回传站点采集行为 (调用参数/堆栈/调用次数) + 变量纠察"
 requires-python = ">=3.12"
 dependencies = [

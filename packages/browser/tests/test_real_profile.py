@@ -25,6 +25,27 @@ def test_language_is_managed_not_inherited():
     assert rp.PREFS["languages"][0] == "en-US"
     assert rp.PREFS["font_isolation"] == "strict"
 
+
+def test_spawn_passes_serve_subcommand():
+    """run.py 只是 hxb 的壳; 少了 serve, argparse 会把 127.0.0.1 当成非法子命令 (CI 实测 exit 3)."""
+    cmd = rp.spawn_command(8325)
+    assert cmd[1:3] == ["run.py", "serve"]
+    assert cmd[cmd.index("--host") + 1] == "127.0.0.1"
+    assert cmd[cmd.index("--port") + 1] == "8325"
+
+
+def test_wait_api_gives_up_when_child_already_exited():
+    """API 子进程立刻退出时不能空等满 --wait 秒."""
+    import subprocess
+    import sys
+    import time
+
+    proc = subprocess.Popen([sys.executable, "-c", "pass"])
+    proc.wait()
+    start = time.monotonic()
+    assert rp.wait_api("http://127.0.0.1:9", 30, proc) is False
+    assert time.monotonic() - start < 5
+
 def test_ci_profile_hides_webrtc():
     """CI profile must use proxy so hide_webrtc is true and STUN cannot leak the exit IP (srflx)."""
     import importlib.util

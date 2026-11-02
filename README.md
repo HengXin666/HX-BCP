@@ -39,7 +39,7 @@ docs/                   架构 / 用法 / 参考
 
 ```sh
 # 缓存代理 (Python, 需要 uv)
-cd packages/cache-proxy && uv run hxcp serve --port 8898
+cd packages/cache-proxy && uv run python -m hxcp.api --port 8898
 
 # 指纹浏览器 (Python, 需要 uv)
 cd packages/browser && uv run hxb serve --port 8325
@@ -47,6 +47,22 @@ cd packages/browser && uv run hxb serve --port 8325
 # 控制台 (Node 22 + pnpm)
 cd apps/console-web && pnpm install && pnpm dev
 ```
+
+五个包都是可安装库, 同一份代码既能 `uv run`, 也能被下游项目当 git 依赖消费:
+
+| 目录 | 发行名 | 导入名 | CLI 入口 | 数据目录覆盖 |
+|---|---|---|---|---|
+| `packages/browser` | hx-browser | `hx_browser` | `hxb serve --host --port [--reload]` | `HX_BROWSER_DATA_DIR` (优先于 `settings.json` 的 `data_dir`) |
+| `packages/cache-proxy` | hx-capture-proxy | `hxcp` | `hxcp` (缓存库) / `python -m hxcp.api --port` (HTTP 服务) | `--cache-dir` |
+| `packages/fingerprint` | hx-fingerprint | `probe` | `hxfp` | 无 |
+| `packages/fingerprint-audit` | fp-audit | `audit` / `rules` / `probes` | `fp-audit` | 无 |
+| `packages/fingerprint-insight` | fp-insight | `fpinsight` | `fp-insight serve --host --port` | `FPI_DATA_DIR` |
+
+```sh
+uv add "hx-browser @ git+https://github.com/HengXin666/HX-BCP.git@v0.2.0#subdirectory=packages/browser"
+```
+
+推 `v*` tag 时 `.github/workflows/release.yml` 构建五个 wheel 并挂到 GitHub Release。
 
 操作细节见 [docs/guides/quickstart.md](docs/guides/quickstart.md)。
 

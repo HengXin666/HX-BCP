@@ -1,0 +1,45 @@
+name: release
+
+on:
+    push:
+        tags: ["v*"]
+
+permissions:
+    contents: write
+
+concurrency:
+    group: release-${{ github.ref }}
+    cancel-in-progress: false
+
+jobs:
+    wheels:
+        name: 构建五个 wheel 并挂到 Release
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: astral-sh/setup-uv@v4
+            - name: tag 与五个包的 version 必须一致
+              run: |
+                  set -euo pipefail
+                  tag="${GITHUB_REF_NAME#v}"
+                  for p in browser cache-proxy fingerprint fingerprint-audit fingerprint-insight; do
+                      v=$(python3 -c "import sys,tomllib;print(tomllib.load(open(sys.argv[1],\"rb\"))[\"project\"][\"version\"])" "packages/$p/pyproject.toml")
+                      echo "$p=$v"
+                      if [ "$v" != "$tag" ]; then
+                          echo "::error::packages/$p 版本 $v 与 tag $tag 不一致"
+                          exit 1
+                      fi
+                  done
+            - name: uv build
+              run: |
+                  set -euo pipefail
+                  mkdir -p dist
+                  for p in browser cache-proxy fingerprint fingerprint-audit fingerprint-insight; do
+                      uv build --wheel --out-dir dist "packages/$p"
+                  done
+                  ls -l dist
+            - name: 上传到 GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  files: dist/*.whl
+                  generate_release_notes: true

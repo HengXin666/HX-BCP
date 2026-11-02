@@ -31,19 +31,19 @@
 
 ```bash
 # ① 质检一个已在运行的环境 (最常用)
-uv run audit.py --endpoint http://127.0.0.1:43020
+uv run fp-audit --endpoint http://127.0.0.1:43020
 
 # ② 顺带拉起一个环境再质检 (headless, 不占桌面)
-uv run audit.py --launch headless --profile /tmp/fp-test --proxy http://127.0.0.1:7892
+uv run fp-audit --launch headless --profile /tmp/fp-test --proxy http://127.0.0.1:7892
 
 # ③ 指定期望时区 (按出口国家给, 这是最有区分力的一条)
-uv run audit.py --endpoint http://127.0.0.1:43020 --expect-tz Asia/Tokyo
+uv run fp-audit --endpoint http://127.0.0.1:43020 --expect-tz Asia/Tokyo
 
 # ③b 拉起时**直接对齐**时区 (不只比对, 真的传进去)
-uv run audit.py --launch headless --expect-tz Asia/Tokyo --fix-tz
+uv run fp-audit --launch headless --expect-tz Asia/Tokyo --fix-tz
 
 # ④ 只跑一站 / 机器可读
-uv run audit.py --endpoint http://127.0.0.1:43020 --only creepjs --json
+uv run fp-audit --endpoint http://127.0.0.1:43020 --only creepjs --json
 ```
 
 退出码: `0` = 绿或黄 (可用), `1` = 有红线 (不可用), `2` = 端点不可达。

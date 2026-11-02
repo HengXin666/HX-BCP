@@ -31,14 +31,14 @@
 cd workspaces/browser-auto/fp-insight
 
 # ① 一条命令跑完, 直接出技术画像 (不需常驻服务)
-uv run python -m fpinsight.cli run --url https://example.com --seconds 20
+uv run fp-insight run --url https://example.com --seconds 20
 
 # ② 常驻服务 + 实时面板 (推荐: 可以边点边看)
-./run.sh start fp-insight          # 或: uv run python -m fpinsight.cli serve
+./run.sh start fp-insight          # 或: uv run fp-insight serve
 #   面板 http://127.0.0.1:28360/    (HX-Webx 入口 /proxy/fp-insight/)
 
 # ③ 重建某次会话的画像
-uv run python -m fpinsight.cli report --sid s1234abcd --out report.json
+uv run fp-insight report --sid s1234abcd --out report.json
 ```
 
 `run` 模式会自己挑一个空闲端口起内嵌服务 (探针必须连回 WS 才能回传, 所以服务是必需品),
@@ -96,7 +96,7 @@ WebSocket /ws/fp  ──►  Hub (SQLite, 单写线程)
 | `fpinsight/hub.py` | 事件中枢: 落盘 / 幂等合并 / 可见性屏障 |
 | `fpinsight/app.py` | FastAPI: 探针入站 + 面板流 + 证据查询 |
 | `fpinsight/cli.py` | `serve` / `run` / `report` / `tail` / `sessions` |
-| `dashboard/` | 面板 (原生 ESM, 无构建步骤) |
+| `fpinsight/dashboard/` | 面板 (原生 ESM, 无构建步骤) |
 
 ## 覆盖的指纹面
 

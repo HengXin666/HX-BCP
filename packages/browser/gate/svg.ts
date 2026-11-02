@@ -24,7 +24,7 @@ export function scorecardSvg(report: SiteReport): string {
     `<rect width="${width}" height="${height}" fill="#f3efe6"/>`,
     `<rect x="16" y="16" width="${width - 32}" height="${height - 32}" fill="${PAPER}" stroke="${INK}"/>`,
     text(32, 48, "HX GATE", 13, MUTED),
-    text(848, 48, "按检测站实测", 13, MUTED, "end"),
+    text(848, 48, `${report.browser || "未标注浏览器"} · 按检测站实测`, 13, MUTED, "end"),
     text(32, 100, showScore(report.score), 48, INK),
     text(176, 88, verdict, 22, verdictColor),
     text(176, 112, `${report.scored.length} 站有结论 · ${report.failed.length} 站失败 · ${report.missed.length} 站未测`, 13, MUTED),

@@ -1,6 +1,6 @@
 # dashboard
 
-> 路径: `toolbox/fp-insight/dashboard/` · 类型: 前端/Node
+> 路径: `packages/fingerprint-insight/fpinsight/dashboard/` · 类型: 前端/Node
 
 ## 这是什么
 

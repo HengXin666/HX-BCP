@@ -1,8 +1,8 @@
 """fp-insight CLI。
 
 两种用法:
-- fpi serve            常驻服务, 面板在 http://127.0.0.1:28360/
-- fpi run --url URL    一条命令跑完: 起服务 -> 开会话 -> 导航 -> 观测 -> 出画像 (无需常驻)
+- fp-insight serve            常驻服务, 面板在 http://127.0.0.1:28360/
+- fp-insight run --url URL    一条命令跑完: 起服务 -> 开会话 -> 导航 -> 观测 -> 出画像 (无需常驻)
 
 run 模式在**同一进程内**同时跑 uvicorn 与 CDP 会话: 探针要连回 WS 端口才能回传,
 所以"不启服务"这条路走不通; 但用户不必自己管理两个进程。
@@ -135,11 +135,11 @@ async def _run(args: argparse.Namespace) -> int:
 
 
 def _q(sql: str, args: tuple = ()) -> list[dict]:
-    """只读查询 —— **自建连接, 不依赖 Hub 已启动**。
+    r"""只读查询 —— **自建连接, 不依赖 Hub 已启动**。
 
     Bug (2026-09-22 实测): 原实现转调 app._q, 而它读 HUB._init_con —— 那个属性
     只在 HUB.start() 之后才存在 (Hub.start -> _conn_init 里赋值)。
-    于是 \`fpi sessions\` / \`fpi report\` 在**服务没跑**时必然
+    于是 fp-insight sessions / fp-insight report 在**服务没跑**时必然
     AttributeError: 'Hub' object has no attribute '_init_con'。
     修法: CLI 直接开自己的 sqlite 只读连接 (uri mode=ro),
           既不依赖 Hub 生命周期, 也不会写入。"""
@@ -284,7 +284,7 @@ async def _sessions(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="fpi", description="fp-insight 浏览器指纹探测工具")
+    p = argparse.ArgumentParser(prog="fp-insight", description="fp-insight 浏览器指纹探测工具")
     p.add_argument("--port", type=int, default=int(os.environ.get("FPI_PORT", "28360")))
     sub = p.add_subparsers(dest="cmd", required=True)
 

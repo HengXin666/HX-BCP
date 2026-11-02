@@ -2,7 +2,7 @@
 
 | 组件 | 默认端口 | 覆盖方式 |
 |---|---|---|
-| 缓存代理 | 8898 | `hxcp serve --port` |
+| 缓存代理 | 8898 | `python -m hxcp.api --port` |
 | 指纹浏览器 API | 8325 | `hxb serve --port` |
 | 上游代理 (示例) | 7890 | 由使用者提供, 本仓库不内置 |
 | 控制台 dev server | 由 Vite 决定 | `pnpm dev --port` |

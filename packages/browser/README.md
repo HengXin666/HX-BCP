@@ -16,15 +16,23 @@ Linux 版 Web 服务化浏览器环境管理器(参考 local-browser 二次开�
 ## 快速开始
 
 ```bash
-cd hx-browser
+cd packages/browser
 uv sync                          # 安装依赖(含 dev 组: playwright/selenium/drissionpage)
-uv run python run.py             # 默认 0.0.0.0:8325
-# 浏览器路径自动探测, 也可用 PUT /api/v1/settings 手动指定
+uv run hxb serve                 # 默认 0.0.0.0:8325 (端口取 settings.api_port)
+# 浏览器路径自动探测, 也可在管理台「设置」手动指定
 ```
 
 打开 http://127.0.0.1:8325/ 即控制台 (`apps/console-web` 的构建产物); API 文档 http://127.0.0.1:8325/docs 。
 
-## 控制台前端
+装成库 (`uv add hx-browser`) 后入口同样是 `hxb serve`; 数据目录用环境变量覆盖,
+优先级高于 `settings.json` 的 `data_dir`:
+
+```bash
+export HX_BROWSER_DATA_DIR=/srv/hx-browser-data
+hxb serve --host 127.0.0.1 --port 8325
+```
+
+## 管理台前端
 
 `src/hx_browser/web/` 只放 `apps/console-web` 的 vite 构建产物, 由 `api.py` 挂到 `/`。重建 (vite 的 outDir 指向这里并先清空目录):
 
@@ -150,7 +158,7 @@ data/
 ## 测试
 
 ```bash
-uv run python run.py &          # 先起服务
+uv run hxb serve &              # 先起服务
 uv run pytest tests/ -v         # 冒烟测试
 ```
 
