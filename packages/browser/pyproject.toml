@@ -10,7 +10,11 @@ dependencies = [
     "pydantic>=2.7",
     "httpx>=0.27",
     "markdown>=3.5",
+    "bcp-lane",
 ]
+
+[project.scripts]
+hxb = "hx_browser.cli:main"
 
 [project.optional-dependencies]
 # crypto for account-pack password encryption
@@ -21,6 +25,9 @@ dev = ["pytest>=8.0", "playwright>=1.45", "selenium>=4.20", "drissionpage>=4.0"]
 
 [tool.uv]
 default-groups = ["dev"]
+
+[tool.uv.sources]
+bcp-lane = { path = "../lane", editable = true }
 
 [build-system]
 requires = ["hatchling"]

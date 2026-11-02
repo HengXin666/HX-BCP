@@ -2,7 +2,7 @@
 
 Agent Note: .agents/notes/implemented/feature/2026-10-17-hxbrowser-live-view.md
 
-从 live_view.py 拆出 (单文件 300 行上限)。边界按职责取: live_view 管「一条 page
+从 live_view.py 拆出 (单文件 500 行上限)。边界按职责取: live_view 管「一条 page
 连接上的帧流与输入」, 本模块管「换哪个页面、去哪个地址」—— 后者要读 browser 级
 的 /json 目标表, 与当前 page 连接无关。
 

@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: fp-audit
+Version: 0.1.0
+Summary: 指纹环境质检红线: 对任意浏览器环境跑 creepjs/browserleaks/amiunique/pixelscan 一致性质检
+Requires-Python: >=3.11
+Requires-Dist: websocket-client>=1.8

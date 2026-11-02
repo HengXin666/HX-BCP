@@ -1,4 +1,4 @@
-"""REST + MCP 端到端 (TestClient, 临时数据目录, 不启动浏览器、不出网)。
+"""REST + MCP 端到端 (TestClient, 临时数据目录, 不启动浏览器, 不出网).
 
 Agent Note: .agents/notes/implemented/feature/2026-10-16-hxbrowser-profile-ops-nodecloak.md
 """
@@ -220,7 +220,7 @@ def test_mcp_http_tools(c):
         "purge_profile",
         "list_kernels",
     } <= names
-    made = _rpc(c, "tools/call", {"name": "create_profile", "arguments": {
+    made = _rpc(c, "tools/call", {"name": "create_profile", "arguments": {"project": "test",
         "name": "via-mcp", "tags": ["ai"], "proxy_link": "socks5://u:supersecret@127.0.0.1:1080"}})  # fmt: skip
     text = made["result"]["content"][0]["text"]
     assert (
@@ -228,7 +228,7 @@ def test_mcp_http_tools(c):
     )  # 返回给 AI 的密码已脱敏
     env_id = json.loads(text)["data"]["id"]
     listed = json.loads(
-        _rpc(c, "tools/call", {"name": "list_profiles", "arguments": {"tag": "ai"}})[
+        _rpc(c, "tools/call", {"name": "list_profiles", "arguments": {"project": "test", "tag": "ai"}})[
             "result"
         ]["content"][0]["text"]
     )

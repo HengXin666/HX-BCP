@@ -2,7 +2,7 @@
 
 # Agent Note: .agents/notes/implemented/feature/2026-10-13-hxbrowser-visible-window-and-multi-instance.md
 
-职责切分 (每文件 <=300 行; 本文件与 api.py 是既有存量, 棘轮登记在册只许降不许涨):
+职责切分 (每文件 <=500 行; 本文件与 api.py 是既有存量, 棘轮登记在册只许降不许涨):
 
     runtime.py   运行态账本 / 孤儿进程 / 僵尸回收 / 落盘接管
     ports.py     CDP 端口分配与预留

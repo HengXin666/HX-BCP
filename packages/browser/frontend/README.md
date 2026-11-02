@@ -1,4 +1,6 @@
-# 前端
+# 前端 (已废弃)
+
+> **已废弃, 不要构建.** 这是沿用 local-browser 的旧管理台, 8325 现在托管 `apps/console-web` 的构建产物 (`cd apps/console-web && pnpm install && pnpm build`). `vite.config.js` 一加载就抛错, 防止有人照旧流程把老页面拷回 `src/hx_browser/web/`.
 
 > 路径: `services/hx-browser/frontend/` · 类型: 项目
 

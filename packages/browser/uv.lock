@@ -48,6 +48,16 @@ wheels = [
 ]
 
 [[package]]
+name = "bcp-lane"
+version = "0.1.0"
+source = { editable = "../lane" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.0" }]
+
+[[package]]
 name = "certifi"
 version = "2026.7.22"
 source = { registry = "https://pypi.org/simple" }
@@ -635,6 +645,7 @@ name = "hx-browser"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "bcp-lane" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "markdown" },
@@ -659,6 +670,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "bcp-lane", editable = "../lane" },
     { name = "cryptography", marker = "extra == 'crypto'", specifier = ">=42.0" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },

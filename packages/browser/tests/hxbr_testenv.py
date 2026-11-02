@@ -1,4 +1,4 @@
-"""测试用隔离数据目录: 每个测试一个临时 data_dir, 绝不碰 services/hx-browser/data。
+"""测试用隔离数据目录: 每个测试一个临时 data_dir, 绝不碰 services/hx-browser/data.
 
 Agent Note: .agents/notes/implemented/feature/2026-10-16-hxbrowser-profile-ops-nodecloak.md
 """
@@ -13,12 +13,12 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from hx_browser import api, config, store  # noqa: E402
+from hx_browser import api, api_common, config, store  # noqa: E402
 from hx_browser.models import Settings  # noqa: E402
 
 
 def isolate(tmp_path: Path) -> Path:
-    """把全局 settings/store/manager 指到 tmp_path; 返回 data_dir。"""
+    """把全局 settings/store/manager 指到 tmp_path; 返回 data_dir. """
     data = tmp_path / "data"
     data.mkdir(parents=True, exist_ok=True)
     config.settings_manager.path = data / "settings.json"
@@ -26,10 +26,14 @@ def isolate(tmp_path: Path) -> Path:
         Settings(data_dir=str(data), chromium_path="", firefox_path="")
     )
     store.store_singleton = None
-    api._manager = None
+    api_common._manager = None
     return data
 
 
-def client(tmp_path: Path):
+TEST_PROJECT = "test"
+
+
+def client(tmp_path: Path, headers: dict | None = None):
+    """TestClient on an isolated data dir, agent lane with project test unless headers say otherwise."""
     isolate(tmp_path)
-    return TestClient(api.create_app())
+    return TestClient(api.create_app(), headers={"x-bcp-project": TEST_PROJECT} if headers is None else headers)

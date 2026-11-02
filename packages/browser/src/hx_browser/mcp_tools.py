@@ -1,22 +1,22 @@
-"""MCP 工具表 —— 每个工具 = 一个既有 REST 端点 (stdio 与 HTTP 两种传输共用)。
+"""MCP 工具表 -- 每个工具 = 一个既有 REST 端点 (stdio 与 HTTP 两种传输共用).
 
 Agent Note: .agents/notes/implemented/feature/2026-10-16-hxbrowser-profile-ops-nodecloak.md
 
 ## 为什么 MCP 只是 REST 的一层薄壳
 
-判据 (删除要先进回收站、偏好互斥、代理不回落直连...) 只在 REST 背后实现一次;
-MCP 工具若直接调内部函数, 就会出现两套入口两套判据。所以这里只做:
-参数 -> HTTP 请求 -> 结果脱敏 -> MCP content。
+判据 (删除要先进回收站, 偏好互斥, 代理不回落直连...) 只在 REST 背后实现一次;
+MCP 工具若直接调内部函数, 就会出现两套入口两套判据. 所以这里只做:
+参数 -> HTTP 请求 -> 结果脱敏 -> MCP content.
 
 ## 脱敏
 
-返回给 AI 的 JSON 里 password / two_factor / cookies 一律替换为 "***" (非空时)。
-REST 本身仍返回明文 (管理台编辑表单依赖它, 改了会破坏既有前端)。
+返回给 AI 的 JSON 里 password / two_factor / cookies 一律替换为 "***" (非空时).
+REST 本身仍返回明文 (管理台编辑表单依赖它, 改了会破坏既有前端).
 
 ## 与 CDP 的关系
 
-start_profile 返回 runtime.cdp_http —— 交给 Playwright MCP / chrome-devtools-mcp
-(``--browserUrl``) 或任何 CDP 客户端即可接管页面。本服务不重复实现页面操作工具。
+start_profile 返回 runtime.cdp_http -- 交给 Playwright MCP / chrome-devtools-mcp
+(``--browserUrl``) 或任何 CDP 客户端即可接管页面. 本服务不重复实现页面操作工具.
 """
 
 from __future__ import annotations
@@ -24,12 +24,14 @@ from __future__ import annotations
 import json
 
 import httpx
+import lane
 
 SECRET_KEYS = {"password", "two_factor", "cookies"}
 MASK = "***"
 _STR = {"type": "string"}
 _BOOL = {"type": "boolean"}
 ENV_ID = {"env_id": {**_STR, "description": "副本 id (env_xxx)"}}
+PROJECT = {"project": {**_STR, "description": "project name, lowercase letters digits and dash, 2..40, required on every call"}}
 _PROFILE_FIELDS = {
     "name": _STR,
     "tags": {"type": "array", "items": _STR},
@@ -38,6 +40,7 @@ _PROFILE_FIELDS = {
         **_STR,
         "description": "cloak/chrome/chromium/edge/brave/firefox/librewolf",
     },
+    "folder": {**_STR, "description": "folder inside this project, empty means the project root"},
     "proxy_link": {
         **_STR,
         "description": "socks5://user:pass@host:port / hxpxy://身份 / direct / system",
@@ -81,6 +84,8 @@ TOOLS: dict[str, tuple[str, dict, list[str], str, str]] = {
     "parse_proxy": ("解析代理链接 (兼容 upstream-proxy), 不回显密码", {"link": _STR}, ["link"], "POST", "/proxies/parse"),
     "start_hxcp": ("为运行中的副本挂载 hxcp 缓存代理", ENV_ID, ["env_id"], "POST", "/environments/{env_id}/hxcp/start"),
     "stop_hxcp": ("停止副本的 hxcp 缓存代理", ENV_ID, ["env_id"], "POST", "/environments/{env_id}/hxcp/stop"),
+    "list_folders": ("list folders of this project", {}, [], "GET", "/folders"),
+    "create_folder": ("create a folder in this project", {"name": _STR}, ["name"], "POST", "/folders"),
     "hxcp_status": ("查询副本 hxcp 状态", ENV_ID, ["env_id"], "GET", "/environments/{env_id}/hxcp/status"),
 }  # fmt: skip
 
@@ -90,8 +95,8 @@ def tool_list() -> list[dict]:
     for name, (desc, props, required, _, _) in TOOLS.items():
         schema = {
             "type": "object",
-            "properties": props,
-            "required": required,
+            "properties": {**PROJECT, **props},
+            "required": ["project", *required],
             "additionalProperties": False,
         }
         out.append({"name": name, "description": desc, "inputSchema": schema})
@@ -112,7 +117,7 @@ def _body(name: str, args: dict) -> dict:
     body = {
         k: v
         for k, v in args.items()
-        if k not in ("env_id", "proxy_link", "kernel", "confirm")
+        if k not in ("env_id", "proxy_link", "kernel", "confirm", "project")
     }
     if args.get("proxy_link"):
         body["proxy"] = {"link": args["proxy_link"]}
@@ -122,12 +127,12 @@ def _body(name: str, args: dict) -> dict:
 
 
 async def call_tool(client: httpx.AsyncClient, name: str, args: dict) -> dict:
-    """执行工具, 返回 MCP CallToolResult。"""
+    """执行工具, 返回 MCP CallToolResult. """
     if name not in TOOLS:
         return _result({"error": "未知工具: %s" % name}, True)
     _, props, required, method, path = TOOLS[name]
-    missing = [k for k in required if args.get(k) in (None, "")]
-    unknown = [k for k in args if k not in props]
+    missing = [k for k in ["project", *required] if args.get(k) in (None, "")]
+    unknown = [k for k in args if k not in props and k != "project"]
     if missing or unknown:
         return _result(
             {"error": "参数错误", "missing": missing, "unknown": unknown}, True
@@ -135,6 +140,7 @@ async def call_tool(client: httpx.AsyncClient, name: str, args: dict) -> dict:
     if name == "purge_profile" and args.get("confirm") is not True:
         return _result({"error": "彻底删除不可恢复, 需显式 confirm=true"}, True)
     url = "/api/v1" + path.format(**{k: str(v) for k, v in args.items()})
+    headers = {lane.HEADER_PROJECT: str(args["project"])}  # agent lane, no default project
     params = {
         k: v
         for k, v in args.items()
@@ -143,15 +149,16 @@ async def call_tool(client: httpx.AsyncClient, name: str, args: dict) -> dict:
     if method == "GET":
         r = await client.get(
             url,
+            headers=headers,
             params={
                 k: str(v).lower() if isinstance(v, bool) else v
                 for k, v in params.items()
             },
         )
     elif method == "DELETE":
-        r = await client.delete(url)
+        r = await client.delete(url, headers=headers)
     else:
-        r = await client.request(method, url, json=_body(name, args))
+        r = await client.request(method, url, json=_body(name, args), headers=headers)
     try:
         data = r.json()
     except ValueError:
