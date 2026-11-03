@@ -1,13 +1,13 @@
-"""副本管理 / 检测与修复 / 回收站 / 内核 的 REST 路由 (2026-10-16)。
+"""副本管理 / 检测与修复 / 回收站 / 内核 的 REST 路由 (2026-10-16).
 
 Agent Note: .agents/notes/implemented/feature/2026-10-16-hxbrowser-profile-ops-nodecloak.md
 
-为什么不写进 api.py: api.py 是行数棘轮登记的存量 (只许降不许涨)。本文件只做
-HTTP 形状转换, 判据全在 profile_ops / doctor / repair_ops / netcheck。
-响应外形沿用 api.py 的 {code, msg, data} (code=0 成功), 前端与 MCP 不用区分新旧接口。
+为什么不写进 api.py: api.py 是行数棘轮登记的存量 (只许降不许涨). 本文件只做
+HTTP 形状转换, 判据全在 profile_ops / doctor / repair_ops / netcheck.
+响应外形沿用 api.py 的 {code, msg, data} (code=0 成功), 前端与 MCP 不用区分新旧接口.
 
 路径约定 (api.py 里记过的坑): 顶层固定段 (/trash /tags /repairs /kernels) 不挂在
-/environments/ 下, 否则会被 /environments/{env_id} 抢先匹配成 env_id。
+/environments/ 下, 否则会被 /environments/{env_id} 抢先匹配成 env_id.
 """
 
 from __future__ import annotations
@@ -35,6 +35,7 @@ from . import (
 from .browser import get_runtime
 from .config import settings_manager
 from .envview import env_dict
+from .lane_guard import visible
 from .prefs import ProfilePrefs
 from .profile_rules import validate_prefs
 from .proxy_link import ProxyLinkError, parse_link
@@ -68,7 +69,7 @@ class FixReq(BaseModel):
 
 
 def build_router(start_env, manager) -> APIRouter:
-    """start_env/manager 由 api.create_app 注入 (复用既有启动路由的全部逻辑, 不复制一份)。"""
+    """start_env/manager 由 api.create_app 注入 (复用既有启动路由的全部逻辑, 不复制一份). """
     r = APIRouter(prefix="/api/v1")
 
     @r.get("/kernels")
@@ -84,7 +85,7 @@ def build_router(start_env, manager) -> APIRouter:
 
     @r.get("/profiles")
     async def list_profiles(search: str = "", tag: str = "", deleted: bool = False):
-        envs = [e for e in get_store().load_envs() if bool(e.deleted_at) == deleted]
+        envs = [e for e in get_store().load_envs() if bool(e.deleted_at) == deleted and visible(e)]
         items = [env_dict(e) for e in envs if profile_ops.matches(e, search, tag)]
         return ok(
             {"list": items, "total": len(items), "tags": profile_ops.tag_counts(envs)}
@@ -92,12 +93,12 @@ def build_router(start_env, manager) -> APIRouter:
 
     @r.get("/tags")
     async def list_tags():
-        envs = [e for e in get_store().load_envs() if not e.deleted_at]
+        envs = [e for e in get_store().load_envs() if not e.deleted_at and visible(e)]
         return ok(profile_ops.tag_counts(envs))
 
     @r.get("/trash")
     async def list_trash():
-        envs = [env_dict(e) for e in get_store().load_envs() if e.deleted_at]
+        envs = [env_dict(e) for e in get_store().load_envs() if e.deleted_at and visible(e)]
         return ok({"list": envs, "total": len(envs)})
 
     @r.post("/environments/{env_id}/restore")
@@ -150,7 +151,7 @@ def build_router(start_env, manager) -> APIRouter:
             return fail("设置格式无效: %s" % e)
         errors = validate_prefs(env)
         if errors:
-            return fail("；".join(errors))
+            return fail("; ".join(errors))
         get_store().update_env(env)
         get_store().add_log("env.prefs", {"id": env_id})
         return ok(env_dict(env))
@@ -218,7 +219,7 @@ def build_router(start_env, manager) -> APIRouter:
 
     @r.get("/skill")
     async def get_skill():
-        """AI 操作手册（提示词页面）—— 自 api.py 迁来, 路径与返回形状不变。"""
+        """AI 操作手册 (提示词页面) -- 自 api.py 迁来, 路径与返回形状不变. """
         if not SKILL_DOC.exists():
             return fail("skill 文档不存在: docs/AI-GUIDE.md")
         raw = SKILL_DOC.read_text("utf-8")

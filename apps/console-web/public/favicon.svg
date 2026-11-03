@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <style>
+    .tile { fill: #18181b; }
+    .line { fill: none; stroke: #fafafa; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .dot { fill: #fafafa; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #fafafa; }
+      .line { stroke: #18181b; }
+      .dot { fill: #18181b; }
+    }
+  </style>
+  <rect class="tile" x="1" y="1" width="30" height="30" rx="7" />
+  <rect class="line" x="6" y="7" width="20" height="17" rx="2.5" />
+  <path class="line" d="M6 12h20" />
+  <circle class="dot" cx="9" cy="9.5" r="1" />
+  <circle class="dot" cx="12" cy="9.5" r="1" />
+  <path class="line" d="M16 22v-3.5M16 18.5l-4-3M16 18.5l4-3" />
+</svg>

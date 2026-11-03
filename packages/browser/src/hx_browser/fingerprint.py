@@ -196,20 +196,21 @@ _CONTENT_JS = r"""
     } catch (e) {}
   }
 
-  // ---------- 时区（TZ env 已覆盖 Date，JS 兜底） ----------
-  if (FP.timezone_offset !== undefined) {
+  // ---------- timezone ----------
+  if (typeof FP.timezone_offset === 'number') {
     try { def(Date.prototype, 'getTimezoneOffset', () => FP.timezone_offset); } catch (e) {}
-    try {
-      const tzName = FP.timezone_name;
-      if (tzName && Intl.DateTimeFormat) {
-        def(Intl.DateTimeFormat.prototype, 'resolvedOptions', function() {
-          const r = Intl.DateTimeFormat.prototype.resolvedOptions.call(this);
-          try { r.timeZone = tzName; } catch (e) {}
-          return r;
-        });
-      }
-    } catch (e) {}
   }
+  try {
+    const tzName = FP.timezone_name;
+    if (tzName && Intl.DateTimeFormat) {
+      const origResolved = Intl.DateTimeFormat.prototype.resolvedOptions;
+      Intl.DateTimeFormat.prototype.resolvedOptions = function () {
+        const r = origResolved.call(this);
+        try { r.timeZone = tzName; } catch (e) {}
+        return r;
+      };
+    }
+  } catch (e) {}
 
   // ---------- Canvas / measureText / WebGL readPixels / Audio 噪声: 按副本 seed, 见 noise.js ----------
   %NOISE_JS%
@@ -248,6 +249,54 @@ _CONTENT_JS = r"""
   // STUN 包根本不发, 泄露面从源头消失。
   // (2026-10-10) 此处原有一条 Agent Note 回链, 指向的 note 从未落盘 —— 悬空回链会让
   // verify-all 的 backlinks 门禁失败。决策内容保留在本注释上方, 待该 note 补齐后恢复回链。
+  // ---------- WebRTC: child realms (hx-child-realm, 2026-10-25) ----------
+  // PR #12 之后 CreepJS 仍报 typ srflx: 怀疑它从同源 about:blank / srcdoc iframe 的
+  // contentWindow 取干净的 RTCPeerConnection, 绕过本 realm 的 hook。拿到子 window 时同步打补丁。
+  if (FP.hide_webrtc) {
+    try {
+      const patched = new WeakSet();
+      patched.add(window);
+      const patchRealm = function (w) {
+        try {
+          if (!w || patched.has(w)) return;
+          patched.add(w);
+          const Real = w.RTCPeerConnection || w.webkitRTCPeerConnection;
+          if (!Real) return;
+          const Wrapped = function (cfg) {
+            const safe = Object.assign({}, cfg || {}, { iceServers: [] });
+            try { return new Real(Object.assign({}, safe, { iceTransportPolicy: 'relay' })); }
+            catch (e) { return new Real(safe); }
+          };
+          Wrapped.prototype = Real.prototype;
+          ['RTCPeerConnection', 'webkitRTCPeerConnection'].forEach(function (k) {
+            if (w[k]) Object.defineProperty(w, k, { configurable: true, writable: true, value: Wrapped });
+          });
+        } catch (e) {}
+      };
+      const hookGetter = function (proto, prop) {
+        const d = Object.getOwnPropertyDescriptor(proto, prop);
+        if (!d || !d.get) return;
+        const g = d.get;
+        Object.defineProperty(proto, prop, Object.assign({}, d, {
+          get: function () {
+            const v = g.call(this);
+            try { patchRealm(prop === 'contentDocument' ? (v && v.defaultView) : v); } catch (e) {}
+            return v;
+          },
+        }));
+      };
+      [window.HTMLIFrameElement, window.HTMLFrameElement, window.HTMLObjectElement].forEach(function (C) {
+        if (!C) return;
+        hookGetter(C.prototype, 'contentWindow');
+        hookGetter(C.prototype, 'contentDocument');
+      });
+      const _open = window.open;
+      if (_open) {
+        window.open = function () { const w = _open.apply(this, arguments); patchRealm(w); return w; };
+      }
+    } catch (e) {}
+  }
+
   if (FP.hide_webrtc) {
     try {
       const RealPC = window.RTCPeerConnection || window.webkitRTCPeerConnection;
@@ -328,6 +377,12 @@ def _noise_js() -> str:
     return ";(%s)(FP, window);" % NOISE_JS_FILE.read_text("utf-8").strip()
 
 
+def ua_for(os_name: str, major: str) -> str:
+    """按 os 与内核主版本拼 Chrome UA, 版本只留主版本 (Chrome UA 精简后的格式), 未知 os 按 Windows"""
+    plat = UA_PLATFORMS.get(os_name, UA_PLATFORMS["Windows"])["ua_platform"]
+    return f"Mozilla/5.0 ({plat}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{major}.0.0.0 Safari/537.36"
+
+
 def gen_random_fingerprint(browser: str = "sun", os_name: str | None = None, country: str | None = None) -> dict:
     """按平台随机生成一套自洽指纹。"""
     os_name = os_name or random.choice(OS_POOL)
@@ -335,11 +390,7 @@ def gen_random_fingerprint(browser: str = "sun", os_name: str | None = None, cou
     # 内核版本（真实探测）→ 构造一致的 UA / Client Hints
     kernel_major = _detect_kernel_major()
     chrome_ver = f"{kernel_major}.0.0.0" if kernel_major else "151.0.0.0"
-
-    if os_name == "macOS":
-        ua = f"Mozilla/5.0 ({os_cfg['ua_platform']}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_ver} Safari/537.36"
-    else:
-        ua = f"Mozilla/5.0 ({os_cfg['ua_platform']}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_ver} Safari/537.36"
+    ua = ua_for(os_name, kernel_major or "151")
 
     # 地区倾向：country 命中则用该地区时区/语言
     # country -> tz 的映射在 locale.py —— 那里是**唯一**定义处 (api.py 的 match_ip
@@ -434,43 +485,9 @@ def _brands_for(major: int) -> list[dict]:
 # ---------------- 扩展 / user.js ----------------
 def build_fingerprint_extension(env: Environment, profile_dir: Path, dark: bool = False) -> Path:
     """生成 MV3 指纹扩展目录，返回路径。"""
-    fp = env.fingerprint
-    resolution = parse_resolution(fp.resolution) or (1280, 820)
-    width, height = resolution
-    inner = getattr(fp, "_fp", None) or {}
-    fp_json = {
-        "dark_mode": bool(dark),
-        "user_agent": fp.user_agent or "",
-        "app_version": inner.get("app_version", ""),
-        "platform": platform_for(fp.os),
-        "language": (fp.language or "en-US").split(",")[0],
-        "languages": [x for x in (fp.language or "en-US,en").split(",") if x] or ["en-US", "en"],
-        "hardware_concurrency": fp.hardware_concurrency or 0,
-        "device_memory": fp.device_memory or 0,
-        "max_touch_points": 0 if fp.device_type == "desktop" else 5,
-        "width": width,
-        "height": height,
-        "color_depth": fp.color_depth or 24,
-        "pixel_ratio": inner.get("pixel_ratio", 1.0),
-        "orientation": inner.get("orientation", "landscape-primary"),
-        "timezone_offset": None,
-        "timezone_name": fp.timezone or "",
-        "canvas_noise": bool(fp.canvas_noise),
-        "audio_noise": bool(fp.audio_noise),
-        "webgl_noise": bool(fp.webgl_noise),
-        "webgl_vendor": fp.webgl_vendor or "",
-        "webgl_renderer": fp.webgl_renderer or "",
-        "webrtc_public_ip": fp.webrtc_public_ip or "",
-        "hide_webrtc": fp.webrtc_mode == "proxy",
-        "fake_media_devices": bool(inner.get("fake_media_devices", False)),
-        "do_not_track": inner.get("do_not_track"),
-        "notification_permission": inner.get("notification_permission", ""),
-        "client_hints_brands": inner.get("client_hints_brands", []),
-        "hint_platform": inner.get("hint_platform", "Windows"),
-        "hint_platform_version": inner.get("hint_platform_version", ""),
-        "hint_architecture": inner.get("hint_architecture", ""),
-        "ua_full_version": inner.get("ua_full_version", ""),
-    }
+    from .guard import _fp_json_for  # 局部导入: guard 依赖本模块, 字典只在 guard 定义一次
+
+    fp_json = _fp_json_for(env, dark, profile_dir)
     ext_dir = profile_dir / "fingerprint-extension"
     ext_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
@@ -485,13 +502,12 @@ def build_fingerprint_extension(env: Environment, profile_dir: Path, dark: bool 
                 "run_at": "document_start",
                 "world": "MAIN",
                 "all_frames": True,
+                "match_about_blank": True,
+                "match_origin_as_fallback": True,
             }
         ],
     }
     (ext_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), "utf-8")
-    from .cloak import seed_for  # 局部导入, 避免循环依赖
-
-    fp_json["noise_seed"] = seed_for(env.id, profile_dir)
     content = _CONTENT_JS.replace("%NOISE_JS%", _noise_js()).replace("%FP_JSON%", json.dumps(fp_json))
     (ext_dir / "content.js").write_text(content, "utf-8")
     return ext_dir

@@ -22,7 +22,7 @@ uv run hxb serve                 # 默认 0.0.0.0:8325 (端口取 settings.api_p
 # 浏览器路径自动探测, 也可在管理台「设置」手动指定
 ```
 
-打开 http://127.0.0.1:8325/ 即管理台; API 文档 http://127.0.0.1:8325/docs 。
+打开 http://127.0.0.1:8325/ 即控制台 (`apps/console-web` 的构建产物); API 文档 http://127.0.0.1:8325/docs 。
 
 装成库 (`uv add hx-browser`) 后入口同样是 `hxb serve`; 数据目录用环境变量覆盖,
 优先级高于 `settings.json` 的 `data_dir`:
@@ -34,14 +34,15 @@ hxb serve --host 127.0.0.1 --port 8325
 
 ## 管理台前端
 
-复用 local-browser 的 React 界面(环境管理/分组/代理/扩展/模板/指纹检测/设置), 通过
-`frontend/public/localenv-shim.js` 把前端的 `window.localEnv`(原 Electron IPC 桥)映射到
-HX-Browser 的 REST API——**后端完全自研, UI 沿用原版风格**。重建前端:
+`src/hx_browser/web/` 只放 `apps/console-web` 的 vite 构建产物, 由 `api.py` 挂到 `/`。重建 (vite 的 outDir 指向这里并先清空目录):
 
 ```bash
-cd frontend && npm install && npx vite build && cd ..
-rm -rf src/hx_browser/web/* && cp -r frontend/dist/* src/hx_browser/web/
+cd apps/console-web && pnpm install && pnpm build   # 在仓库根执行
 ```
+
+首次打开会要求粘贴本机人类令牌 (`cat ~/.bcp/human.token`), 换成 12 小时的 HttpOnly 会话 cookie, 机制见 `.agents/notes/implemented/feature/2026-11-01-console-on-8325.md`。
+
+> **已废弃**: `frontend/` 是沿用 local-browser 的旧管理台 (`localenv-shim.js` 映射 `window.localEnv`), 不再构建, 也不要再拷进 `src/hx_browser/web/`。它的 `vite.config.js` 一加载就报错退出。下面的截图是旧界面。
 
 界面截图见 [docs/screenshots/](docs/screenshots/)。
 

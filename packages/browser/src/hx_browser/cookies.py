@@ -5,7 +5,7 @@ Agent Note: .agents/notes/implemented/feature/2026-10-13-hxbrowser-visible-windo
 ## 为什么拆出来
 
 browser.py 已到 659 行 (棘轮登记在册, 只许降不许涨), 而本次要加「可见窗口 +
-多实例并发」—— 逻辑塞进去必然破 300 行上限。拆的边界按职责取: **cookie 的解析与
+多实例并发」—— 逻辑塞进去必然破 500 行上限。拆的边界按职责取: **cookie 的解析与
 落盘**与「浏览器进程怎么起/怎么停」是两件事, 且 cookie 这块是**自包含**的
 (输入 raw 字符串, 输出 sqlite 写入), 不碰 RUNTIME / _PROCS。
 

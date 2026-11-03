@@ -11,6 +11,9 @@ importers:
       '@hx/ui':
         specifier: https://github.com/HengXin666/HX-UI/releases/download/v0.1.2/hx-ui-0.1.2.tgz
         version: https://github.com/HengXin666/HX-UI/releases/download/v0.1.2/hx-ui-0.1.2.tgz(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(immer@11.1.21)(react-dom@19.3.1(react@19.3.1))(react-is@19.3.1)(react@19.3.1)(redux@5.0.1)(tailwindcss@4.3.3)
+      lucide-react:
+        specifier: ^1.59.0
+        version: 1.59.0(@types/react@19.3.0)(react@19.3.1)
       react:
         specifier: ^19.0.0
         version: 19.3.1

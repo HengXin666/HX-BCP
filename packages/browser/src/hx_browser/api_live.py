@@ -1,9 +1,9 @@
-"""实时预览的路由: 列在跑副本 + 每副本一条 WebSocket (帧下行 / 输入上行)。
+"""实时预览的路由: 列在跑副本 + 每副本一条 WebSocket (帧下行 / 输入上行).
 
 Agent Note: .agents/notes/implemented/feature/2026-10-17-hxbrowser-live-view.md
 
-为什么不写进 api.py: api.py 是行数棘轮登记的存量 (只许降不许涨)。本文件只做
-「HTTP/WS 形状 <-> LiveSession」的转换, 帧流与输入换算在 live_view / live_protocol。
+为什么不写进 api.py: api.py 是行数棘轮登记的存量 (只许降不许涨). 本文件只做
+"HTTP/WS 形状 <-> LiveSession"的转换, 帧流与输入换算在 live_view / live_protocol.
 
 ## 路径
 
@@ -14,15 +14,15 @@ Agent Note: .agents/notes/implemented/feature/2026-10-17-hxbrowser-live-view.md
 ## 鉴权与既有中间件的关系
 
 api.py 的 api_key 中间件是 `@app.middleware("http")`, Starlette 的 http 中间件**不经过**
-websocket scope —— 不在这里补一次, 设了 api_key 的服务会对 WS 完全不设防。所以本模块
-自己按同一口径校验 (header `x-api-key`, 或浏览器 WebSocket 无法设头时用 `?key=`)。
+websocket scope -- 不在这里补一次, 设了 api_key 的服务会对 WS 完全不设防. 所以本模块
+自己按同一口径校验 (header `x-api-key`, 或浏览器 WebSocket 无法设头时用 `?key=`).
 
 ## Origin 校验 (跨站 WebSocket 劫持)
 
 浏览器的 WebSocket 不受同源策略限制: 任意网页都能连 `ws://127.0.0.1:8325/...`, 默认
-api_key 为空时它就能看画面、发输入。所以带 `Origin` 头的握手 (只有浏览器会带) 必须来自
+api_key 为空时它就能看画面, 发输入. 所以带 `Origin` 头的握手 (只有浏览器会带) 必须来自
 可信来源: 回环地址 (本机的控制台 / 门户), 与本服务同 host, 或 `HXBR_LIVE_ORIGINS`
-(逗号分隔) 显式列出的来源。不带 `Origin` 的是脚本类客户端, 仍按 api_key 判定。
+(逗号分隔) 显式列出的来源. 不带 `Origin` 的是脚本类客户端, 仍按 api_key 判定.
 """
 
 from __future__ import annotations
@@ -40,18 +40,20 @@ from . import live_view as lv
 from .browser import get_runtime
 from .config import settings_manager
 from .envview import env_dict
+from .lane_guard import visible, ws_refusal
 from .store import get_store
 
 # WebSocket 关闭码 (RFC 6455 应用私有段 4000-4999): 前端据此区分"别重连"与"可重试"
 WS_CLOSE_UNSUPPORTED = 4400
 WS_CLOSE_AUTH = 4401
 WS_CLOSE_NOT_FOUND = 4404
+WS_CLOSE_LANE = 4403
 WS_CLOSE_UPSTREAM = 4502
 AUTH_REFUSED = "invalid api key or untrusted origin"
 
 
 def _live_view(env) -> dict:
-    """一个副本的预览视图: 平铺墙要的字段, 判据仍全部来自 env_dict / RuntimeInfo。"""
+    """一个副本的预览视图: 平铺墙要的字段, 判据仍全部来自 env_dict / RuntimeInfo. """
     d = env_dict(env)
     rt = d.get("runtime") or {}
     reason = lv.unsupported_reason(env)
@@ -77,7 +79,7 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 def origin_allowed(origin: str, host: str, extra: str = "") -> bool:
-    """握手来源是否可信 (判据只此一处, 见模块头)。空 origin = 非浏览器客户端。"""
+    """握手来源是否可信 (判据只此一处, 见模块头). 空 origin = 非浏览器客户端. """
     if origin == "":
         return True
     allowed = {o.strip().rstrip("/") for o in extra.split(",") if o.strip()}
@@ -101,7 +103,7 @@ def _authorized(ws: WebSocket) -> bool:
 
 
 async def _refuse(ws: WebSocket, message: str, code: int) -> None:
-    """先发一条 fatal error 再关: 关闭原因字段有 123 字节上限, 中文原因放不下。"""
+    """先发一条 fatal error 再关: 关闭原因字段有 123 字节上限, 中文原因放不下. """
     await ws.accept()
     with contextlib.suppress(Exception):
         await ws.send_json(lp.error_event(message, fatal=True))
@@ -113,7 +115,7 @@ def build_router() -> APIRouter:
 
     @r.get("/live/envs")
     async def live_envs():
-        envs = [e for e in get_store().load_envs() if not e.deleted_at]
+        envs = [e for e in get_store().load_envs() if not e.deleted_at and visible(e)]
         views = [_live_view(e) for e in envs if get_runtime(e.id) is not None]
         return JSONResponse({"code": 0, "msg": "success", "data": {"envs": views}})
 
@@ -125,6 +127,10 @@ def build_router() -> APIRouter:
         env = get_store().get_env(env_id)
         if env is None or env.deleted_at:
             await _refuse(ws, "环境不存在", WS_CLOSE_NOT_FOUND)
+            return
+        refused = ws_refusal(ws, env)  # lane check, http middleware does not see websocket scope
+        if refused:
+            await _refuse(ws, refused, WS_CLOSE_LANE)
             return
         reason = lv.unsupported_reason(env)
         if reason:
@@ -147,7 +153,7 @@ def build_router() -> APIRouter:
         except asyncio.CancelledError:
             await session.close()
             raise
-        except Exception as e:  # noqa: BLE001 — CDP/网络/握手失败都要显式报错并清理
+        except Exception as e:  # noqa: BLE001 - CDP/网络/握手失败都要显式报错并清理
             with contextlib.suppress(Exception):
                 await ws.send_json(
                     lp.error_event(f"连接副本 CDP 失败: {e}", fatal=True)

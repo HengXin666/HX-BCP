@@ -3,7 +3,7 @@
 Agent Note: .agents/notes/implemented/feature/2026-10-13-hxbrowser-visible-window-and-multi-instance.md
 Agent Note: .agents/notes/implemented/bug-fix/2026-10-17-hxbrowser-visible-window-no-ime.md
 
-职责切分 (每文件 <=300 行, 且一件事只在一处定义):
+职责切分 (每文件 <=500 行, 且一件事只在一处定义):
 
     desktop.py  ← 本文件: 用户真实桌面在哪 + 把「可见/不可见」拍板成 DisplayPlan
     xvfb.py              探不到桌面时起虚拟屏 (屏幕外)

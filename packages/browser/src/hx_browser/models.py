@@ -1,4 +1,4 @@
-"""数据模型（对应 PRD §5）。"""
+"""数据模型 (对应 PRD §5) . """
 
 # Agent Note: .agents/notes/implemented/bug-fix/2026-09-19-hx-browser-zombie-and-runtime-persistence.md
 
@@ -7,7 +7,9 @@ from __future__ import annotations
 import time
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from lane import HUMAN as LANE_HUMAN
 
 from .prefs import ProfilePrefs
 
@@ -26,7 +28,7 @@ class Account(BaseModel):
     username: str = ""
     password: str = ""
     two_factor: str = ""
-    cookies: str = ""  # JSON / Netscape / raw string，启动时注入
+    cookies: str = ""  # JSON / Netscape / raw string, 启动时注入
 
 
 class ProxyConfig(BaseModel):
@@ -61,7 +63,7 @@ class Fingerprint(BaseModel):
     webrtc_public_ip: str = ""
     headless: bool = False  # 环境级可见性; 与全局 headless_default 取或 (desktop.resolve_display)
     tls_mode: str = "none"  # none | chrome(tls-proxy, v0.2)
-    dark_mode: bool | None = None  # None=跟随全局设置；True=强制暗色主题
+    dark_mode: bool | None = None  # None=跟随全局设置; True=强制暗色主题
 
 
 class Launch(BaseModel):
@@ -71,14 +73,17 @@ class Launch(BaseModel):
 
 
 class Storage(BaseModel):
-    cloud_sync: bool = False  # 本地标记，不上传
+    cloud_sync: bool = False  # 本地标记, 不上传
     clear_cache_after_close: bool = False
 
 
 class Environment(BaseModel):
     id: str = ""
     name: str = ""
-    group: str = "默认"
+    group: str = "默认"  # legacy, read only, folder replaces it
+    lane: str = LANE_HUMAN  # human or agent, stamped by store.add_env from the request scope
+    project: str = ""  # agent lane only
+    folder: str = ""  # empty means the group root, one level only
     platform: str = "custom"
     tags: list[str] = Field(default_factory=list)
     country: str = ""
@@ -104,8 +109,16 @@ class Environment(BaseModel):
     open_count: int = 0
     # 阶段 1: 可选自动挂载 hxcp 缓存代理 (CDP Fetch 层)
     hxcp_enabled: bool = False
-    # 运行时（不持久化）
+    # 运行时 (不持久化)
     runtime: dict[str, Any] = Field(default_factory=dict, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_folder(cls, data: Any) -> Any:
+        """Map the legacy group onto folder when a stored record has no folder yet."""
+        if isinstance(data, dict) and not data.get("folder") and data.get("group") not in (None, "", "默认"):
+            data = {**data, "folder": str(data["group"])}
+        return data
 
 
 class RuntimeInfo(BaseModel):
@@ -119,8 +132,8 @@ class RuntimeInfo(BaseModel):
     login_state: str = "unknown"  # ok | expired | empty | unknown
     # ---- 可见窗口契约 (2026-10-13, T2/T4 依赖; 判据在 display.desktop/window) ----
     # visible 是**断言真值**, 不是意图: headless=false 且真探到桌面时先置 True,
-    # 窗口起来后由 window.window_verdict 复核; 复核不过就改回 False 并写 reason。
-    # 绝不拿「进程活着」冒充「窗口可见」(gh-pool 2026-10-02 实测过二者不一致)。
+    # 窗口起来后由 window.window_verdict 复核; 复核不过就改回 False 并写 reason.
+    # 绝不拿"进程活着"冒充"窗口可见"(gh-pool 2026-10-02 实测过二者不一致).
     visible: bool = False
     display: str = (
         ""  # ":1" = 用户真实桌面; ":7x" = Xvfb 虚拟屏 (用户看不见); "" = 无 X
@@ -129,8 +142,8 @@ class RuntimeInfo(BaseModel):
     window_title: str = ""  # 可见顶层窗口标题; 未断言到则为空
     window_id: str = ""  # X11 窗口 id (xdotool); 上层可据此截图/操作
     window_pos: list[int] = Field(default_factory=list)  # 实测客户区坐标 [x, y]
-    # display_source 是**类别** (desktop|headless|xvfb|xvfb-failed) —— 断言比的就是它;
-    # display_source_detail 是细节 ("Xwayland#2760"), 只供排查, 不参与任何判断。
+    # display_source 是**类别** (desktop|headless|xvfb|xvfb-failed) -- 断言比的就是它;
+    # display_source_detail 是细节 ("Xwayland#2760"), 只供排查, 不参与任何判断.
     display_source: str = ""
     display_source_detail: str = ""
     reason: str = ""  # visible=false 时**必须**非空, 说明为什么用户看不见
@@ -190,6 +203,6 @@ class Settings(BaseModel):
     headless_default: bool = False  # 全局关窗开关: 与 fingerprint.headless **取或**
     default_homepage: str = "about:blank"
     auto_match_timezone: bool = True
-    dark_mode: bool = False  # 浏览器实例默认暗色主题（prefers-color-scheme: dark）
+    dark_mode: bool = False  # 浏览器实例默认暗色主题 (prefers-color-scheme: dark)
     # 内核 id -> 可执行文件路径 (覆盖自动探测); 例 {"chrome": "/opt/google/chrome/chrome"}
     kernel_paths: dict[str, str] = Field(default_factory=dict)

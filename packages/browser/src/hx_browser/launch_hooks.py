@@ -6,8 +6,8 @@ Agent Note: .agents/notes/implemented/feature/2026-10-16-hxbrowser-profile-ops-n
 
 prepare() 返回环境的一份**深拷贝**, 其 fingerprint.language / timezone 已替换成
 本次实际生效值 (custom / ip / system / inherit 推导见 profile_rules)。
-browser.py 既有的每条路径 (--lang、TZ 环境变量、CloakBrowser --fingerprint-*、
-指纹扩展、Firefox user.js) 都读这两个字段 —— 于是新模式自动贯穿到所有内核,
+browser.py 既有的每条路径 (--lang/TZ 环境变量/CloakBrowser --fingerprint-*/
+指纹扩展/Firefox user.js) 都读这两个字段 —— 于是新模式自动贯穿到所有内核,
 且 inherit 时拷贝与原环境逐字段相同 (= 改动前行为)。
 
 持久化的环境**不被改写**: IP 匹配结果只记在 env.last_region, 下次换出口重新匹配。
@@ -115,7 +115,9 @@ async def prepare(env, profile_dir: Path, plan=None, cdp_port: int = 0) -> Launc
         plan=plan,
         cdp_port=cdp_port,
     )
-    prep.fonts = fontiso.prepare(profile_dir, env.prefs.font_isolation, env.prefs.fonts)
+    prep.fonts = fontiso.prepare(
+        profile_dir, env.prefs.font_isolation, env.prefs.fonts, env.fingerprint.os
+    )
     if plan is not None and display_iso.wants_wayland(env):
         display_iso.use_wayland(env.id, plan)
     if is_sandbox(env):
@@ -124,7 +126,10 @@ async def prepare(env, profile_dir: Path, plan=None, cdp_port: int = 0) -> Launc
         up = upstream_of(env.proxy)
         if up is not None:
             prep.relay_port = await relay.ensure(env.id, up)
+    # 两处都存: 启动链用的是 prep.env (深拷贝副本), 后续 API 调用拿到的
+    # 是重新构造的 env, 只存一处总有一边 prep_of 取不到
     view.runtime[PREP_KEY] = prep
+    env.runtime[PREP_KEY] = prep
     return prep
 
 

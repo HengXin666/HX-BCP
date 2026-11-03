@@ -44,7 +44,8 @@ function (FP, W) {
         try {
           const w = m.width;
           if (typeof w === 'number' && Number.isFinite(w) && w > 0) {
-            const k = mixStr(String(text) + '|' + String(this.font));
+            // key 不含 this.font: 缺失字体回落到同一字体时原宽相等, 加噪后也必须相等, 否则字体探测全报存在
+            const k = mixStr(String(text) + '|' + String(w));
             const d = ((k % 997) + 1) * 1e-7 * ((k & 1024) ? 1 : -1);
             Object.defineProperty(m, 'width', { value: w + d, configurable: true, enumerable: true });
           }

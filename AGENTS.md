@@ -42,7 +42,7 @@
 - 失败 ≥2 次先查历史与已知问题, 再改代码。
 
 ### 代码
-- 单文件 ≤300 行; 注释只描述函数语义且 ≤10 行, 不写决策。
+- 单文件 ≤500 行; 注释只描述函数语义且 ≤10 行, 不写决策。
 - 决策写 `.agents/notes/implemented/<class>/<yyyy-mm-dd-topic>.md`, 由函数签名引用。
 - 非 .md 文件禁止 markdown 语法与中文标点, 标点只用 ASCII 逗号。
 - Python 用 uv 管理; 前端只用 React + TypeScript, 包管理用 pnpm。

@@ -29,7 +29,10 @@ def serve(host: str, port: int | None, reload: bool) -> int:
     print(f"\n  HX-Browser listening on http://{host}:{port}")
     print(f"  API:    http://{host}:{port}/api/v1/status")
     print(f"  Web UI: http://{host}:{port}/\n")
-    uvicorn.run("hx_browser.api:create_app", host=host, port=port, reload=reload, factory=True)
+    # proxy_headers off: the human lane trusts a loopback socket peer (lane.loopback_admitted), and
+    # uvicorn would otherwise replace the peer with X-Forwarded-For sent by a trusted proxy address
+    uvicorn.run("hx_browser.api:create_app", host=host, port=port, reload=reload, factory=True,
+                proxy_headers=False)
     return 0
 
 

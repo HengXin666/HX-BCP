@@ -1,4 +1,4 @@
-"""JSON 持久化（环境/代理/扩展/模板/日志），对应 PRD §6 持久化。"""
+"""JSON 持久化 (环境/代理/扩展/模板/日志) , 对应 PRD §6 持久化. """
 
 from __future__ import annotations
 
@@ -46,6 +46,9 @@ class Store:
             _atomic_write(self.envs_path, [e.model_dump(exclude={"runtime"}) for e in envs])
 
     def add_env(self, env: Environment) -> Environment:
+        from .lane_guard import stamp  # every create path ends here, lane and project come from the request
+
+        stamp(env)
         env.serial_no = len(self.load_envs()) + 1
         env.created_at = now_ms()
         env.updated_at = now_ms()
