@@ -87,7 +87,7 @@ sun / flower 旧判定不变。`speaks_cdp` 由它派生, 只有 webkit 族为 F
   `fingerprint.build_fingerprint_extension` 生成的 `content.js`, 同源, 不另写一份。
 - 参数必须排在 URL 之前; 排在后面时进程起不来, stderr 也没有输出, 很难查。
 - 生成失败、`content.js` 缺失或为空、写盘失败, 一律抛 `WebKitLaunchError`, 绝不静默起无指纹窗口。
-- 已知泄漏: 脚本源自 Chromium 档, 会造出真 Safari 没有的 `window.chrome`; iframe / Worker 未实测。
+- 注入脚本的 family 守卫: webkit 档不再造 `window.chrome` 与 `navigator.deviceMemory` (真 Safari 两者都没有); iframe / Worker 未实测。
 
 ### kernel_paths 语义
 

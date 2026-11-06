@@ -44,3 +44,25 @@ def test_blink_env_unchanged():
     d = guard._fp_json_for(_env(browser="sun", os="Windows"), False)
     assert d["family"] == "blink"
     assert d["webgl_renderer"] != mac_models.WEBGL_RENDERER
+
+
+def test_safari_app_version_derived_from_ua():
+    d = guard._fp_json_for(_env(browser=SAFARI, kernel=SAFARI, os="macOS"), False)
+    assert d["app_version"] == mac_models.safari_user_agent().removeprefix("Mozilla/")
+
+
+def test_live_view_rejects_webkit():
+    from hx_browser import live_view
+
+    assert live_view.unsupported_reason(_env(browser=SAFARI, kernel=SAFARI)) == live_view.WEBKIT_UNSUPPORTED
+
+
+def test_legacy_safari_env_resolves_safari_path(tmp_path):
+    from types import SimpleNamespace
+
+    from hx_browser import kernels
+
+    exe = tmp_path / "MiniBrowser"
+    exe.write_text("")
+    s = SimpleNamespace(kernel_paths={SAFARI: str(exe)}, chromium_path="/usr/bin/chromium", firefox_path="")
+    assert kernels.resolve_executable(_env(browser=SAFARI, kernel=""), s) == str(exe)

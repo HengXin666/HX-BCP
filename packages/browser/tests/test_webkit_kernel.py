@@ -57,6 +57,7 @@ def test_family_of_kernel_id_is_case_insensitive():
 def test_family_of_legacy_env_unchanged():
     assert kernels.family_of(_env(kernel="", browser="flower")) == kernels.GECKO
     assert kernels.family_of(_env(kernel="", browser="sun")) == kernels.BLINK
+    assert kernels.family_of(_env(kernel="", browser=SAFARI)) == kernels.WEBKIT
 
 
 def test_speaks_cdp_false_only_for_webkit():

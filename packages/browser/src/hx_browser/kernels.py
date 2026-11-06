@@ -53,7 +53,7 @@ _EXE_CHROME = ("google-chrome-stable", "google-chrome")  # browser-gate: allow-l
 _EXE_CHROMIUM = ("chromium", "chromium-browser")  # browser-gate: allow-legacy 用户要求多内核, 仅定位
 _EXE_FIREFOX = ("firefox", "firefox-esr")  # browser-gate: allow-legacy 用户要求多内核, 仅定位
 _ID_FIREFOX = "firefox"  # browser-gate: allow-legacy 内核 id
-_EXE_SAFARI = ("/usr/lib/webkit2gtk-4.1/MiniBrowser",)  # browser-gate: allow-legacy 用户要求多内核, 仅定位
+_EXE_SAFARI = ("/usr/lib/webkit2gtk-4.1/MiniBrowser", "/usr/libexec/webkit2gtk-4.1/MiniBrowser", "/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/MiniBrowser", "/usr/lib/aarch64-linux-gnu/webkit2gtk-4.1/MiniBrowser")  # browser-gate: allow-legacy 用户要求多内核, 仅定位 (Arch / Fedora / Debian amd64 / Debian arm64)
 _ID_SAFARI = "safari"  # browser-gate: allow-legacy 内核 id
 KERNELS: tuple[Kernel, ...] = (
     Kernel("cloak", "CloakBrowser (Chromium 补丁版)", BLINK),
@@ -113,6 +113,8 @@ def detect(kernel_id: str) -> str:
 def resolve_executable(env, settings) -> str:
     """副本实际要启动的可执行文件。优先级: settings.kernel_paths[kernel] > 探测 > 族默认。"""
     k = get(getattr(env.fingerprint, "kernel", "") or "")
+    if k is None and family_of(env) == WEBKIT:  # kernel 为空的 safari 旧环境: 按 safari 内核解析
+        k = _BY_ID[_ID_SAFARI]
     if k is None:  # 旧环境: 行为与改动前一致
         return (
             settings.firefox_path if family_of(env) == GECKO else settings.chromium_path

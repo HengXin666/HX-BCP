@@ -488,6 +488,8 @@ class BrowserManager:
             return False
         # 优先 CDP 优雅关闭
         closed = await cdp.close_browser(info.debug_port, timeout=4) if kernels.speaks_cdp(env) else False
+        if not kernels.speaks_cdp(env):
+            timeout = min(timeout, 3.0)  # 无 CDP 不能优雅关闭: 只给短宽限期, 不空等满 10s
         deadline = time.time() + timeout
         while time.time() < deadline:
             if not _pid_alive(info.pid):

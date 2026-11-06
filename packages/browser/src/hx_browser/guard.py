@@ -232,7 +232,8 @@ def _fp_json_for(
     return {
         "dark_mode": bool(dark),
         "user_agent": effective_user_agent(env, exe),
-        "app_version": inner.get("app_version", ""),
+        "app_version": inner.get("app_version", "")
+        or (effective_user_agent(env, exe).removeprefix("Mozilla/") if kernels.family_of(env) == kernels.WEBKIT else ""),
         "platform": platform_for(fp.os),
         "language": (fp.language or "en-US").split(",")[0],
         "languages": [x for x in (fp.language or "en-US,en").split(",") if x]

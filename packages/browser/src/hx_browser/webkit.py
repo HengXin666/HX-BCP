@@ -88,13 +88,14 @@ def proxy_url(env, port: int) -> str:
     return "http://%s:%d" % (RELAY_HOST, int(port))
 
 
-def user_script_path(env, profile_dir) -> str:
+def user_script_path(env, profile_dir, dark: bool | None = None) -> str:
     """注入准备: 调 build_fingerprint_extension 生成 content.js, 原样写成 profile_dir 下的 user script.
 
     同一来源: 文本逐字节取自 Chromium 扩展的 content.js, 不在这里另写指纹脚本.
     生成抛异常 / 落盘失败 / 文件为空, 一律抛 WebKitLaunchError, 不起没有指纹的窗口.
     """
-    dark = bool(getattr(env.fingerprint, "dark_mode", False))
+    if dark is None:  # 调用方没给有效值时退回环境字段; launch 会传 BrowserManager._dark_enabled 的结果 (含全局 dark_mode)
+        dark = bool(getattr(env.fingerprint, "dark_mode", False))
     try:
         ext_dir = fingerprint.build_fingerprint_extension(env, Path(profile_dir), dark)
         data = (Path(ext_dir) / "content.js").read_bytes()
@@ -172,6 +173,8 @@ async def launch(env, profile_dir, port: int, plan, spawn) -> tuple[int, str]:
     ensure_not_headless(env, plan)
     prep = launch_hooks.prep_of(env)
     relay_port = prep.relay_port if prep is not None else 0
-    exe = resolve_executable(getattr(getattr(spawn, "__self__", None), "settings", None))
-    argv = build_argv(env, profile_dir, relay_port, user_script_path(env, profile_dir))
+    mgr = getattr(spawn, "__self__", None)
+    exe = resolve_executable(getattr(mgr, "settings", None))
+    dark = mgr._dark_enabled(env) if hasattr(mgr, "_dark_enabled") else None
+    argv = build_argv(env, profile_dir, relay_port, user_script_path(env, profile_dir, dark))
     return spawn(exe, argv, env, plan, child_env(os.environ, plan))
