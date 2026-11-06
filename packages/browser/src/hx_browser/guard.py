@@ -213,6 +213,7 @@ def _fp_json_for(
     env: Environment, dark: bool, profile_dir: Path | None = None, exe: str = ""
 ) -> dict:
     """构造注入用的 FP 字典 —— 扩展路径与 CDP 路径共用同一份定义 (单一真源)。"""
+    from . import kernels  # 局部导入, 避免循环依赖
     from .cloak import seed_for  # 局部导入, 与 build_fingerprint_extension 同一个 seed 来源
 
     fp = env.fingerprint
@@ -234,7 +235,10 @@ def _fp_json_for(
         "width": width,
         "height": height,
         "color_depth": fp.color_depth or 24,
-        "pixel_ratio": inner.get("pixel_ratio") or default_dpr(fp.os, width),
+        "pixel_ratio": inner.get("pixel_ratio")
+        or getattr(fp, "device_scale_factor", 0)
+        or default_dpr(fp.os, width),
+        "family": kernels.family_of(env),
         "orientation": inner.get("orientation", "landscape-primary"),
         "timezone_offset": None,
         "timezone_name": fp.timezone or "",

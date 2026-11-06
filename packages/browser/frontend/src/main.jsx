@@ -75,6 +75,7 @@ const emptyProfile = {
   fingerprint: {
     browser: "sun",
     kernelVersion: "system",
+    kernel: "",
     os: "Windows",
     deviceType: "desktop",
     userAgent: "",
@@ -305,7 +306,8 @@ const defaultProxySettings = {
 
 const browserTypeOptions = [
   { value: "sun", label: "Chromium" },
-  { value: "flower", label: "Firefox" }
+  { value: "flower", label: "Firefox" },
+  { value: "safari", label: "Safari" }
 ];
 
 const sunKernelOptions = [
@@ -326,6 +328,10 @@ const flowerKernelOptions = [
   { value: "firefox-esr", label: "Firefox ESR" },
   { value: "firefox-beta", label: "Firefox Beta" },
   { value: "firefox-nightly", label: "Firefox Nightly" }
+];
+
+const safariKernelOptions = [
+  { value: "system", label: "WebKitGTK" }
 ];
 
 const osOptions = ["Windows", "macOS", "Linux", "Android", "iOS"];
@@ -596,6 +602,7 @@ function randomPassword() {
 function normalizeBrowserType(value) {
   const browser = String(value || "sun").trim().toLowerCase();
   if (["flower", "flowerbrowser", "firefox", "mozilla"].includes(browser)) return "flower";
+  if (["safari", "webkit"].includes(browser)) return "safari";
   return "sun";
 }
 
@@ -716,6 +723,13 @@ function applyOsToProfile(profile, os, extra = {}) {
 function randomUserAgent(os = "Windows", browser = "sun", device = null) {
   const family = normalizeBrowserType(browser);
   const major = family === "flower" ? pick([128, 129, 130, 131, 132, 133]) : pick([136, 137, 138, 139, 140, 141]);
+  if (family === "safari") {
+    if (os === "iOS" || os === "Android") {
+      const target = device?.uaModel === "iPad" ? "iPad; CPU OS 17_6 like Mac OS X" : "iPhone; CPU iPhone OS 17_6 like Mac OS X";
+      return `Mozilla/5.0 (${target}) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1`;
+    }
+    return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15";
+  }
   if (os === "Android") {
     const model = device?.uaModel || device?.name || "Pixel 8 Pro";
     if (family === "flower") return `Mozilla/5.0 (Android 14; Mobile; rv:${major}.0) Gecko/${major}.0 Firefox/${major}.0`;
@@ -3161,6 +3175,7 @@ function GlobalSettingsPanel({ settings, setSettings, showToast, showError }) {
           <div className="formGrid single">
             <Field label="Chromium 路径" wide><input value={form.sunBrowserPath || ""} onChange={(e) => patch("sunBrowserPath", e.target.value)} /></Field>
             <Field label="Firefox 路径" wide><input value={form.flowerBrowserPath || ""} onChange={(e) => patch("flowerBrowserPath", e.target.value)} /></Field>
+            <Field label="Safari / WebKit 路径" wide><input value={form.safariBrowserPath || ""} onChange={(e) => patch("safariBrowserPath", e.target.value)} placeholder="/usr/lib/webkit2gtk-4.1/MiniBrowser" /></Field>
             <Field label="Profile 根目录" wide><input value={form.profileRoot || ""} onChange={(e) => patch("profileRoot", e.target.value)} /></Field>
             <Field label="内核下载目录" wide><input value={form.kernelRoot || ""} onChange={(e) => patch("kernelRoot", e.target.value)} /></Field>
             <Field label="默认首页"><input value={form.defaultHomepage || ""} onChange={(e) => patch("defaultHomepage", e.target.value)} onBlur={(e) => patch("defaultHomepage", normalizeHomepage(e.target.value))} placeholder="https://example.com" /></Field>
@@ -5116,6 +5131,7 @@ function ProfileEditor({ editor, groups, onClose, onSave }) {
                     const os = next.fingerprint.os || "Windows";
                     const device = isMobileOs(os) ? pickMobileDevice(os, next.fingerprint.deviceType) : null;
                     next.fingerprint.browser = browser;
+                    next.fingerprint.kernel = browser === "safari" ? "safari" : "";
                     next.fingerprint.kernelVersion = "system";
                     next.fingerprint.userAgent = randomUserAgent(os, browser, device);
                     return next;
@@ -5125,7 +5141,7 @@ function ProfileEditor({ editor, groups, onClose, onSave }) {
               <Field label="浏览器内核">
                 <SelectMenu
                   value={profile.fingerprint.kernelVersion}
-                  options={profile.fingerprint.browser === "flower" ? flowerKernelOptions : sunKernelOptions}
+                  options={{ flower: flowerKernelOptions, safari: safariKernelOptions }[normalizeBrowserType(profile.fingerprint.browser)] || sunKernelOptions}
                   onChange={(value) => patch(["fingerprint", "kernelVersion"], value)}
                 />
               </Field>
@@ -5355,6 +5371,7 @@ function SettingsPanel({ settings, onClose, onSave }) {
           <div className="formGrid single">
             <Field label="Chromium 路径" wide><input value={form.sunBrowserPath || ""} onChange={(e) => patch("sunBrowserPath", e.target.value)} placeholder="chrome.exe / msedge.exe / brave.exe" /></Field>
             <Field label="Firefox 路径" wide><input value={form.flowerBrowserPath || ""} onChange={(e) => patch("flowerBrowserPath", e.target.value)} placeholder="firefox.exe" /></Field>
+            <Field label="Safari / WebKit 路径" wide><input value={form.safariBrowserPath || ""} onChange={(e) => patch("safariBrowserPath", e.target.value)} placeholder="/usr/lib/webkit2gtk-4.1/MiniBrowser" /></Field>
             <Field label="浏览器路径" wide><input value={form.browserPath || ""} onChange={(e) => patch("browserPath", e.target.value)} /></Field>
             <Field label="Profile 根目录" wide><input value={form.profileRoot || ""} onChange={(e) => patch("profileRoot", e.target.value)} /></Field>
             <Field label="内核下载目录" wide><input value={form.kernelRoot || ""} onChange={(e) => patch("kernelRoot", e.target.value)} /></Field>

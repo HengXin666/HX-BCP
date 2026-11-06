@@ -2,10 +2,11 @@
 
 Agent Note: .agents/notes/implemented/feature/2026-10-16-hxbrowser-profile-ops-nodecloak.md
 
-## 两族, 多内核
+## 三族, 多内核
 
-    blink  Chromium 系: cloak (CloakBrowser) / chrome / chromium / edge / brave
-    gecko  Firefox 系:  firefox / librewolf
+    blink   Chromium 系: cloak (CloakBrowser) / chrome / chromium / edge / brave
+    gecko   Firefox 系:  firefox / librewolf
+    webkit  WebKit 系:   safari (Linux 上为 WebKitGTK MiniBrowser)
 
 族决定**怎么配置** (Preferences JSON vs user.js、CDP vs 远程调试协议); 内核只决定
 **用哪个二进制**。新增一个内核 = 在 KERNELS 里加一行, 不需要改启动逻辑。
@@ -32,6 +33,7 @@ from . import cloak
 
 BLINK = "blink"
 GECKO = "gecko"
+WEBKIT = "webkit"
 LEGACY_GECKO_BROWSER = (
     "flower"  # Fingerprint.browser 的既有取值: sun=Chromium, flower=Firefox
 )
@@ -51,6 +53,8 @@ _EXE_CHROME = ("google-chrome-stable", "google-chrome")  # browser-gate: allow-l
 _EXE_CHROMIUM = ("chromium", "chromium-browser")  # browser-gate: allow-legacy 用户要求多内核, 仅定位
 _EXE_FIREFOX = ("firefox", "firefox-esr")  # browser-gate: allow-legacy 用户要求多内核, 仅定位
 _ID_FIREFOX = "firefox"  # browser-gate: allow-legacy 内核 id
+_EXE_SAFARI = ("/usr/lib/webkit2gtk-4.1/MiniBrowser",)  # browser-gate: allow-legacy 用户要求多内核, 仅定位
+_ID_SAFARI = "safari"  # browser-gate: allow-legacy 内核 id
 KERNELS: tuple[Kernel, ...] = (
     Kernel("cloak", "CloakBrowser (Chromium 补丁版)", BLINK),
     Kernel("chrome", "Google Chrome", BLINK, _EXE_CHROME),  # browser-gate: allow-legacy 内核 id
@@ -59,6 +63,7 @@ KERNELS: tuple[Kernel, ...] = (
     Kernel("brave", "Brave", BLINK, ("brave-browser", "brave")),
     Kernel(_ID_FIREFOX, "Mozilla Firefox", GECKO, _EXE_FIREFOX),
     Kernel("librewolf", "LibreWolf", GECKO, ("librewolf",)),
+    Kernel(_ID_SAFARI, "Safari (WebKit)", WEBKIT, _EXE_SAFARI),  # browser-gate: allow-legacy 内核 id
 )
 # fmt: on
 _BY_ID = {k.id: k for k in KERNELS}
@@ -73,12 +78,21 @@ def family_of(env) -> str:
     k = get(getattr(env.fingerprint, "kernel", "") or "")
     if k is not None:
         return k.family
+    if env.fingerprint.browser == _ID_SAFARI:  # kernel 为空的 safari 旧环境兜底
+        return WEBKIT
     return GECKO if env.fingerprint.browser == LEGACY_GECKO_BROWSER else BLINK
 
 
+def speaks_cdp(env) -> bool:
+    """副本是否走 CDP. 纯函数: 只看内核族, 不探测, 不读文件; 仅 webkit 族返回 False."""
+    return family_of(env) != WEBKIT
+
+
 def legacy_browser_for(kernel_id: str) -> str:
-    """kernel -> 既有 browser 字段值 (前端/账号包仍按 sun/flower 展示)。"""
+    """kernel -> 既有 browser 字段值 (前端/账号包按 sun/flower/safari 展示)."""
     k = get(kernel_id)
+    if k is not None and k.family == WEBKIT:
+        return _ID_SAFARI
     return LEGACY_GECKO_BROWSER if k is not None and k.family == GECKO else "sun"
 
 

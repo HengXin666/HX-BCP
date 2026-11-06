@@ -17,7 +17,7 @@ import random
 import uuid
 from pathlib import Path
 
-from . import locale
+from . import locale, mac_models
 from .models import Environment
 
 # ---------------- 随机指纹池 ----------------
@@ -125,7 +125,9 @@ _CONTENT_JS = r"""
   if (FP.language) def(Navigator.prototype, 'language', () => FP.language);
   if (FP.languages) def(Navigator.prototype, 'languages', () => FP.languages.slice());
   if (FP.hardware_concurrency) def(Navigator.prototype, 'hardwareConcurrency', () => FP.hardware_concurrency);
-  if (FP.device_memory) def(Navigator.prototype, 'deviceMemory', () => FP.device_memory);
+  if (FP.family !== 'webkit') {  // 真 Safari 没有 navigator.deviceMemory
+    if (FP.device_memory) def(Navigator.prototype, 'deviceMemory', () => FP.device_memory);
+  }
   if (FP.max_touch_points !== undefined) def(Navigator.prototype, 'maxTouchPoints', () => FP.max_touch_points);
   if (FP.do_not_track !== undefined) def(Navigator.prototype, 'doNotTrack', () => FP.do_not_track);
   def(Navigator.prototype, 'webdriver', () => false);
@@ -156,11 +158,13 @@ _CONTENT_JS = r"""
   } catch (e) {}
 
   // ---------- window.chrome 存在性 ----------
-  try {
-    if (!window.chrome) {
-      window.chrome = { loadTimes: () => ({}), csi: () => ({}), app: {}, runtime: {}, webstore: {} };
-    }
-  } catch (e) {}
+  if (FP.family !== 'webkit') {  // 真 Safari 没有 window.chrome
+    try {
+      if (!window.chrome) {
+        window.chrome = { loadTimes: () => ({}), csi: () => ({}), app: {}, runtime: {}, webstore: {} };
+      }
+    } catch (e) {}
+  }
 
   // ---------- permissions 一致性（notifications 与 Notification.permission 对齐） ----------
   try {
@@ -385,6 +389,8 @@ def ua_for(os_name: str, major: str) -> str:
 
 def gen_random_fingerprint(browser: str = "sun", os_name: str | None = None, country: str | None = None) -> dict:
     """按平台随机生成一套自洽指纹。"""
+    if browser == "safari":  # browser-gate: allow-legacy WebKit 族独立分支, sun/flower 不经过
+        return _safari_fingerprint(country)
     os_name = os_name or random.choice(OS_POOL)
     os_cfg = UA_PLATFORMS.get(os_name, UA_PLATFORMS["Windows"])
     # 内核版本（真实探测）→ 构造一致的 UA / Client Hints
@@ -442,6 +448,20 @@ def gen_random_fingerprint(browser: str = "sun", os_name: str | None = None, cou
             "hide_webrtc": True,
         },
     }
+
+
+def _safari_fingerprint(country: str | None) -> dict:
+    """WebKit 族: 复用 macOS 档的时区/语言/内存/噪声, 屏幕/DPR/核数取自 mac_models 机型, 不报 UA-CH。"""
+    fp = gen_random_fingerprint("sun", "macOS", country)
+    m = mac_models.pick()
+    ua = mac_models.safari_user_agent()
+    fp.update(browser="safari", user_agent=ua, resolution=m.resolution,  # browser-gate: allow-legacy
+              hardware_concurrency=mac_models.web_cpu_cores(m.cpu_cores), device_scale_factor=m.scale,
+              webgl_vendor=mac_models.WEBGL_VENDOR, webgl_renderer=mac_models.WEBGL_RENDERER,
+              mac_model=m.id)
+    fp["_fp"].update(app_version=ua.removeprefix("Mozilla/"), ua_full_version="",
+                     client_hints_brands=[], pixel_ratio=m.scale)
+    return fp
 
 
 def _detect_kernel_major() -> str:

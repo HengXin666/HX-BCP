@@ -51,6 +51,7 @@ class SettingsUpdate(BaseModel):
     default_homepage: str | None = None
     auto_match_timezone: bool | None = None
     dark_mode: bool | None = None
+    kernel_paths: dict[str, str] | None = None  # 整字段覆盖; 前端须带全量 (见 localenv-shim)
 
 
 @router.put("/settings")
