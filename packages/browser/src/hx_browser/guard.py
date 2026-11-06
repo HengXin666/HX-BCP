@@ -184,6 +184,10 @@ def effective_user_agent(env: Environment, exe: str) -> str:
     """配置了 UA 就用配置; 没配时按内核真实主版本与 fp.os 拼正常 UA, 读不出版本返回空串, 不编版本号"""
     if env.fingerprint.user_agent:
         return env.fingerprint.user_agent
+    from . import kernels, mac_models  # 局部导入, 避免循环依赖
+
+    if kernels.family_of(env) == kernels.WEBKIT:  # Safari 档: 不能拿 Chromium 主版本拼 Chrome UA
+        return mac_models.safari_user_agent()
     major = kernel_major(exe) if exe else ""
     return ua_for(env.fingerprint.os, major) if major else ""
 
@@ -193,6 +197,10 @@ def webgl_pair(env: Environment) -> tuple[str, str]:
     fp = env.fingerprint
     if fp.webgl_renderer:
         return fp.webgl_vendor or "", fp.webgl_renderer
+    from . import kernels, mac_models  # 局部导入, 避免循环依赖
+
+    if kernels.family_of(env) == kernels.WEBKIT:  # 真 WebKit 只报 Apple GPU
+        return mac_models.WEBGL_VENDOR, mac_models.WEBGL_RENDERER
     pool = WEBGL_BY_OS.get(fp.os, WEBGL_BY_OS["Linux"])
     return pool[int(hashlib.sha256(env.id.encode()).hexdigest()[:8], 16) % len(pool)]
 
@@ -213,6 +221,7 @@ def _fp_json_for(
     env: Environment, dark: bool, profile_dir: Path | None = None, exe: str = ""
 ) -> dict:
     """构造注入用的 FP 字典 —— 扩展路径与 CDP 路径共用同一份定义 (单一真源)。"""
+    from . import kernels  # 局部导入, 避免循环依赖
     from .cloak import seed_for  # 局部导入, 与 build_fingerprint_extension 同一个 seed 来源
 
     fp = env.fingerprint
@@ -223,7 +232,8 @@ def _fp_json_for(
     return {
         "dark_mode": bool(dark),
         "user_agent": effective_user_agent(env, exe),
-        "app_version": inner.get("app_version", ""),
+        "app_version": inner.get("app_version", "")
+        or (effective_user_agent(env, exe).removeprefix("Mozilla/") if kernels.family_of(env) == kernels.WEBKIT else ""),
         "platform": platform_for(fp.os),
         "language": (fp.language or "en-US").split(",")[0],
         "languages": [x for x in (fp.language or "en-US,en").split(",") if x]
@@ -234,7 +244,10 @@ def _fp_json_for(
         "width": width,
         "height": height,
         "color_depth": fp.color_depth or 24,
-        "pixel_ratio": inner.get("pixel_ratio") or default_dpr(fp.os, width),
+        "pixel_ratio": inner.get("pixel_ratio")
+        or getattr(fp, "device_scale_factor", 0)
+        or default_dpr(fp.os, width),
+        "family": kernels.family_of(env),
         "orientation": inner.get("orientation", "landscape-primary"),
         "timezone_offset": None,
         "timezone_name": fp.timezone or "",

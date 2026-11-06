@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Spinner, Tabs, TabsContent, TabsList, TabsTrigger } from "@hx/ui";
 import type { Env } from "../../lib/api";
 import { BLANK_FORM, bodyOf, formOf, problems, type FpForm } from "../../lib/fp-form";
-import { defaultKernel, type Kernel } from "../../lib/kernels";
+import { defaultKernel, envFamily, type Kernel } from "../../lib/kernels";
 import { AdvancedSection, BasicSection, DeviceSection, FingerprintSection } from "./FpSections";
 
 /** 新建 (env 为空, 带初始文件夹) 或编辑一个人类组浏览器. */
@@ -44,7 +44,7 @@ export function FpDialog(props: {
 	const body = bodyOf(form, before, props.kernels);
 	const empty = target?.mode === "edit" && Object.keys(body).length === 0;
 	const canSubmit = !props.busy && issues.length === 0 && kernelOk && !empty;
-	const lockFamily = target?.mode === "edit" ? (target.env.fingerprint?.browser === "flower" ? "gecko" : "blink") : undefined;
+	const lockFamily = target?.mode === "edit" ? envFamily(target.env, props.kernels) : undefined;
 	const title = target?.mode === "edit" ? "编辑 " + target.env.name : "新建浏览器";
 
 	return (

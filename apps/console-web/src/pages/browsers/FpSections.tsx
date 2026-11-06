@@ -1,7 +1,7 @@
 import type { JSX, ReactNode } from "react";
 import { Badge, InputField, SelectField, Switch, Textarea } from "@hx/ui";
 import { AUTO, PRESETS, type FpForm } from "../../lib/fp-form";
-import type { Kernel } from "../../lib/kernels";
+import type { Family, Kernel } from "../../lib/kernels";
 import { KernelPicker } from "./KernelBits";
 
 export type SectionProps = { form: FpForm; set: (patch: Partial<FpForm>) => void };
@@ -82,7 +82,7 @@ export function BasicSection({ form, set, folders }: SectionProps & { folders: s
 	);
 }
 
-export function DeviceSection({ form, set, kernels, lockFamily }: SectionProps & { kernels: Kernel[]; lockFamily?: "blink" | "gecko" }): JSX.Element {
+export function DeviceSection({ form, set, kernels, lockFamily }: SectionProps & { kernels: Kernel[]; lockFamily?: Family }): JSX.Element {
 	return (
 		<div className={GRID}>
 			<F label={lockFamily ? "内核 (同族内切换, 换族需新建)" : "内核"} wide>

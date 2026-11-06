@@ -3,7 +3,7 @@ import { Bot, ChevronRight, Tag, Users } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, StateDot, EmptyState } from "@hx/ui";
 import type { Env } from "../../lib/api";
 import { matchStatus, type EnvQuery, type StatusFilter } from "../../lib/env-query";
-import { FAMILY, shortName, type Kernel, type KernelView } from "../../lib/kernels";
+import { familyStyle, shortName, type Kernel, type KernelView } from "../../lib/kernels";
 
 /** 一个可点的条目: 左侧标记, 名称 (单行截断), 右侧计数. 选中时浅底 + 左侧色条 + 加粗, 再点一次取消. */
 export function FacetItem(props: { label: string; count: number; active: boolean; onClick: () => void; mark?: JSX.Element; dim?: boolean; note?: string }): JSX.Element {
@@ -83,7 +83,7 @@ export function KernelFacet(p: Facets & { kernels: Kernel[]; view: (e: Env) => K
 		<FacetSection title="按内核" summary={p.kernels.filter((k) => k.available).length + " / " + p.kernels.length + " 已装"} defaultOpen>
 			{rows.map((k) => (
 				<FacetItem key={k.id} label={shortName(k.label)} count={views.filter((v) => v.id === k.id).length} active={p.query.kernel === k.id} dim={!k.available}
-					note={k.available ? "" : "未安装"} mark={<span className={"size-2 rounded-full " + FAMILY[k.family].dot} />} onClick={() => pick(k.id)} />
+					note={k.available ? "" : "未安装"} mark={<span className={"size-2 rounded-full " + familyStyle(k.family).dot} />} onClick={() => pick(k.id)} />
 			))}
 			<FacetItem label="未指定, 继承设置" count={inherit} active={p.query.kernel === "inherit"} mark={<span className="size-2 rounded-full border border-dashed border-muted-foreground" />} onClick={() => pick("inherit")} />
 		</FacetSection>

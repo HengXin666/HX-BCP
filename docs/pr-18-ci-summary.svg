@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="880" viewBox="0 0 1000 880" font-family="ui-sans-serif,-apple-system,'Segoe UI','Helvetica Neue',Arial,sans-serif">
+  <defs>
+    <style>
+      .bg      { fill: #0d1117; }
+      .card    { fill: #161b22; stroke: #30363d; stroke-width: 1; rx: 8; }
+      .title   { fill: #e6edf3; font-size: 21px; font-weight: 700; }
+      .sub     { fill: #8b949e; font-size: 12.5px; font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+      .h2      { fill: #e6edf3; font-size: 14px; font-weight: 600; }
+      .row     { fill: #c9d1d9; font-size: 13px; }
+      .mono    { fill: #c9d1d9; font-size: 12.5px; font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+      .dim     { fill: #6e7681; font-size: 11.5px; }
+      .pass    { fill: #3fb950; font-size: 12px; font-weight: 600; }
+      .fail    { fill: #f85149; font-size: 12px; font-weight: 600; }
+      .warn    { fill: #d29922; font-size: 12px; font-weight: 600; }
+      .badge-p { fill: #12261e; stroke: #238636; stroke-width: 1; rx: 10; }
+      .badge-f { fill: #2d1214; stroke: #da3633; stroke-width: 1; rx: 10; }
+      .badge-w { fill: #2b2111; stroke: #9e6a03; stroke-width: 1; rx: 10; }
+      .divider { stroke: #21262d; stroke-width: 1; }
+      .bar-p   { fill: #238636; }
+      .bar-f   { fill: #da3633; }
+      .key     { fill: #8b949e; font-size: 12.5px; }
+      .val     { fill: #e6edf3; font-size: 12.5px; font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1000" height="880"/>
+
+  <text class="title" x="32" y="46">PR #18 &#183; Safari / WebKit 内核档</text>
+  <text class="sub"   x="32" y="70">HengXin666/HX-BCP &#183; feat/webkit-safari-kernel &#8594; main &#183; d82af65</text>
+
+  <g>
+    <rect class="badge-p" x="846" y="28" width="122" height="26"/>
+    <text class="pass"   x="861" y="46">MERGEABLE</text>
+  </g>
+
+  <line class="divider" x1="32" y1="90" x2="968" y2="90"/>
+
+  <text class="h2" x="32" y="118">工作流结果 &#183; 11 通过 / 1 失败</text>
+
+  <rect class="card" x="32" y="132" width="936" height="322"/>
+
+  <g>
+    <rect class="bar-p" x="48" y="152" width="9" height="9" rx="2"/>
+    <text class="row" x="68" y="161">Python 静态检查 (ruff)</text>
+    <text class="pass" x="836" y="161">pass</text>
+    <text class="dim"  x="900" y="161">9s</text>
+
+    <rect class="bar-p" x="48" y="178" width="9" height="9" rx="2"/>
+    <text class="row" x="68" y="187">通道判定 (lane)</text>
+    <text class="pass" x="836" y="187">pass</text>
+    <text class="dim"  x="900" y="187">7s</text>
+
+    <rect class="bar-p" x="48" y="204" width="9" height="9" rx="2"/>
+    <text class="row" x="68" y="213">控制台构建</text>
+    <text class="pass" x="836" y="213">pass</text>
+    <text class="dim"  x="900" y="213">26s</text>
+
+    <rect class="bar-p" x="48" y="230" width="9" height="9" rx="2"/>
+    <text class="row" x="68" y="239">门禁抽取器单测</text>
+    <text class="pass" x="836" y="239">pass</text>
+    <text class="dim"  x="900" y="239">6s</text>
+
+    <rect class="bar-p" x="48" y="256" width="9" height="9" rx="2"/>
+    <text class="row" x="68" y="265">GitGuardian Security Checks</text>
+    <text class="pass" x="836" y="265">pass</text>
+    <text class="dim"  x="900" y="265">1s</text>
+
+    <rect class="bar-p" x="48" y="282" width="9" height="9" rx="2"/>
+    <text class="row" x="68" y="291">指纹自检 (audit &#183; 真实 hx-browser 副本)</text>
+    <text class="pass" x="836" y="291">pass</text>
+    <text class="dim"  x="900" y="291">2m36s</text>
+
+    <rect class="bar-p" x="48" y="308" width="9" height="9" rx="2"/>
+    <text class="row" x="68" y="317">Claude 环境评分 (对齐 NodeCloak, 高风险阻断)</text>
+    <text class="pass" x="836" y="317">pass</text>
+    <text class="dim"  x="900" y="317">42s</text>
+
+    <rect class="bar-p" x="48" y="334" width="9" height="9" rx="2"/>
+    <text class="row" x="68" y="343">Claude 环境评分 &#183; 真实副本 (--cdp)</text>
+    <text class="pass" x="836" y="343">pass</text>
+    <text class="dim"  x="900" y="343">23s</text>
+
+    <rect class="bar-p" x="48" y="360" width="9" height="9" rx="2"/>
+    <text class="row" x="68" y="369">公开检测站评分 (只记录)</text>
+    <text class="pass" x="836" y="369">pass</text>
+    <text class="dim"  x="900" y="369">2m45s</text>
+
+    <rect class="bar-p" x="48" y="386" width="9" height="9" rx="2"/>
+    <text class="row" x="68" y="395">code / review</text>
+    <text class="pass" x="836" y="395">pass</text>
+    <text class="dim"  x="900" y="395">34s</text>
+
+    <rect class="bar-p" x="48" y="412" width="9" height="9" rx="2"/>
+    <text class="row" x="68" y="421">cubic &#183; AI code reviewer</text>
+    <text class="pass" x="836" y="421">pass</text>
+    <text class="dim"  x="900" y="421">7m12s</text>
+  </g>
+
+  <line class="divider" x1="48" y1="438" x2="952" y2="438"/>
+
+  <g>
+    <rect class="bar-f" x="48" y="450" width="9" height="9" rx="2"/>
+    <text class="row"  x="68" y="459">context / review  (hx-cr)</text>
+    <text class="fail" x="836" y="459">fail</text>
+    <text class="dim"  x="900" y="459">31s</text>
+  </g>
+
+  <text class="h2" x="32" y="500">context / review 失败归因 &#183; 既有债, 与本 PR 无关</text>
+
+  <rect class="card" x="32" y="514" width="936" height="186"/>
+
+  <g>
+    <text class="key" x="52" y="544">L0 findings</text>
+    <text class="val" x="330" y="544">84  (28 blocking)</text>
+
+    <text class="key" x="52" y="570">rules</text>
+    <text class="val" x="330" y="570">331 error / 4 warning</text>
+
+    <text class="key" x="52" y="596">code / review (同一工具看代码)</text>
+    <text class="val" x="330" y="596">0 finding / 0 blocking</text>
+
+    <text class="key" x="52" y="622">28 个 error 全是</text>
+    <text class="val" x="330" y="622">README.md 缺配套 AGENTS.md (全仓 27 个)</text>
+
+    <text class="key" x="52" y="648">命中本 PR 改动的文件</text>
+    <text class="val" x="330" y="648">0</text>
+
+    <text class="key" x="52" y="674">main 分支同一工作流</text>
+    <text class="val" x="330" y="674">run 40218712799 &#183; 同样 28 blocking / 331 error</text>
+  </g>
+
+  <text class="h2" x="32" y="740">实测 &#183; Xvfb 内真 MiniBrowser 页面读回</text>
+
+  <rect class="card" x="32" y="754" width="454" height="94"/>
+  <rect class="card" x="502" y="754" width="466" height="94"/>
+
+  <g>
+    <text class="key" x="50" y="780">userAgent</text>
+    <text class="val" x="50" y="800">Version/27.2 Safari/605.1.15</text>
+    <text class="key" x="50" y="824">无 Chrome/ &#183; UA-CH brands 为空</text>
+
+    <text class="key" x="520" y="780">screen / dpr / cores</text>
+    <text class="val" x="520" y="800">2240x1260 &#183; 2 &#183; 8</text>
+    <text class="key" x="520" y="824">WebGL Apple GPU / Apple Inc.</text>
+  </g>
+
+  <g>
+    <rect class="badge-p" x="32" y="860" width="188" height="18"/>
+    <text class="pass" x="44" y="872" font-size="10.5">deviceMemory = absent</text>
+
+    <rect class="badge-p" x="228" y="860" width="196" height="18"/>
+    <text class="pass" x="240" y="872" font-size="10.5">window.chrome = undefined</text>
+
+    <rect class="badge-p" x="432" y="860" width="200" height="18"/>
+    <text class="pass" x="444" y="872" font-size="10.5">userAgentData = undefined</text>
+
+    <text class="dim" x="652" y="872">34 条纯函数用例通过 &#183; ruff 通过</text>
+  </g>
+</svg>

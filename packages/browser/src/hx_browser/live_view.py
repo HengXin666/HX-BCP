@@ -58,6 +58,10 @@ FOCUS_QUALITY = {
 QUALITY_PRESETS = {"grid": GRID_QUALITY, "focus": FOCUS_QUALITY}
 PRESET_FOCUS = "focus"
 
+WEBKIT_UNSUPPORTED = (
+    "该副本是 WebKit 系内核 (safari, WebKitGTK MiniBrowser): 它不说 CDP, "
+    "实时预览与远程操作不支持。请用 Chromium 系内核的副本。"
+)
 GECKO_UNSUPPORTED = (
     "该副本是 Firefox 系内核 (gecko): 它没有 CDP Page.startScreencast, "
     "实时预览与远程操作暂不支持。请用 Chromium 系内核 (cloak/chrome/chromium/edge/brave) 的副本。"
@@ -77,6 +81,8 @@ def unsupported_reason(env) -> str:
     """这个副本能不能做实时预览; 空串 = 能。判据只有这一处。"""
     if kernels.family_of(env) == kernels.GECKO:
         return GECKO_UNSUPPORTED
+    if kernels.family_of(env) == kernels.WEBKIT:
+        return WEBKIT_UNSUPPORTED
     return ""
 
 
