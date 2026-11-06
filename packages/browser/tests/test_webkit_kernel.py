@@ -190,3 +190,33 @@ def test_not_headless_passes():
 )
 def test_legacy_browser_for_three_families(kernel_id, expected):
     assert kernels.legacy_browser_for(kernel_id) == expected
+
+
+# ---- merge-safarier P1: 全局 headless_default (plan.headless) 也要拦 ----
+
+
+def test_global_headless_plan_raises():
+    with pytest.raises(webkit.WebKitLaunchError, match="headless_default"):
+        webkit.ensure_not_headless(_env(headless=False), SimpleNamespace(headless=True))
+
+
+def test_visible_plan_passes():
+    webkit.ensure_not_headless(_env(headless=False), SimpleNamespace(headless=False))
+
+
+# ---- merge-safarier P1: 前后端 / 兜底 UA 与 mac_models 同一个 Safari 版本 ----
+
+
+def test_default_ua_uses_mac_models_version():
+    from hx_browser import mac_models
+
+    assert webkit.DEFAULT_SAFARI_UA == mac_models.safari_user_agent()
+    assert "Version/%s " % mac_models.SAFARI_VERSION in webkit.DEFAULT_SAFARI_UA
+
+
+def test_frontend_safari_version_matches_backend():
+    from hx_browser import mac_models
+
+    src = (Path(__file__).resolve().parents[1] / "frontend" / "src" / "main.jsx").read_text("utf-8")
+    assert 'const SAFARI_VERSION = "%s";' % mac_models.SAFARI_VERSION in src
+    assert "Version/17.6 Safari/605.1.15" not in src  # 桌面档不再写死旧版本

@@ -33,7 +33,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from . import fingerprint, kernels, launch_hooks
+from . import fingerprint, kernels, launch_hooks, mac_models
 from .proxy_link import upstream_of
 
 K_GDK_BACKEND = "GDK_BACKEND"
@@ -43,8 +43,8 @@ USER_SCRIPT_NAME = "hx-fingerprint.user.js"
 
 # fmt: off
 KERNEL_ID = "safari"  # browser-gate: allow-legacy 内核 id
-# 环境没配 UA 时的兜底: macOS Safari 17 的真实 UA
-DEFAULT_SAFARI_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15"  # browser-gate: allow-legacy 兜底 UA
+# 环境没配 UA 时的兜底: 与 mac_models.SAFARI_VERSION 同源, 不在两处各写一个版本号
+DEFAULT_SAFARI_UA = mac_models.safari_user_agent()
 # fmt: on
 
 
@@ -52,11 +52,19 @@ class WebKitLaunchError(RuntimeError):
     """WebKit 档无法启动 (headless 请求, 找不到可执行文件, 代理没有 relay 端口)."""
 
 
-def ensure_not_headless(env) -> None:
-    """fingerprint.headless 为真时抛异常. WebKitGTK MiniBrowser 没有 headless 模式."""
+def ensure_not_headless(env, plan=None) -> None:
+    """要求无窗口时抛异常. WebKitGTK MiniBrowser 没有 headless 模式.
+
+    判据与 desktop.resolve_display 一致: 环境 fingerprint.headless 与全局 headless_default 取或;
+    后者体现在 plan.headless 上 (plan 由 browser.start 唯一拍板), 只看环境字段会漏掉全局开关.
+    """
     if bool(getattr(env.fingerprint, "headless", False)):
         raise WebKitLaunchError(
             "Safari 档没有 headless 模式, 请关闭该环境的 fingerprint.headless 后再启动"
+        )
+    if plan is not None and bool(getattr(plan, "headless", False)):
+        raise WebKitLaunchError(
+            "Safari 档没有 headless 模式, 全局设置 headless_default 已开启, 请关闭后再启动"
         )
 
 
@@ -161,6 +169,7 @@ async def launch(env, profile_dir, port: int, plan, spawn) -> tuple[int, str]:
     port 是分配给该副本的调试端口, WebKit 不说 CDP, 这里不用它, 只为与其他族签名对齐.
     spawn 即 BrowserManager._spawn, 显示环境经 child_env 作为 extra_env 传入.
     """
+    ensure_not_headless(env, plan)
     prep = launch_hooks.prep_of(env)
     relay_port = prep.relay_port if prep is not None else 0
     exe = resolve_executable(getattr(getattr(spawn, "__self__", None), "settings", None))

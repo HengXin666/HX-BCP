@@ -1,7 +1,7 @@
 import { useContext, type JSX } from "react";
 import { Badge, RadioGroup, RadioGroupItem } from "@hx/ui";
 import type { Env } from "../../lib/api";
-import { FAMILIES, FAMILY, KernelContext, type Family, type Kernel } from "../../lib/kernels";
+import { FAMILIES, FAMILY, KernelContext, familyStyle, speaksCdp, type Family, type Kernel } from "../../lib/kernels";
 
 /**
  * 内核标识: 族色圆点 + 短名, 族色的描边底, 列宽 <= 80px. 继承设置的旧环境用虚线框 (悬停写明来源), 分得清 "指定" 与 "没指定".
@@ -9,7 +9,7 @@ import { FAMILIES, FAMILY, KernelContext, type Family, type Kernel } from "../..
  */
 export function KernelChip({ env }: { env: Env }): JSX.Element {
 	const v = useContext(KernelContext)(env);
-	const f = FAMILY[v.family];
+	const f = familyStyle(v.family);
 	return (
 		<span
 			className={"inline-flex max-w-[4.5rem] items-center gap-1 rounded border px-1 t-micro normal-case tracking-normal " + f.chip + (v.how === "继承" ? " border-dashed" : "")}
@@ -41,13 +41,13 @@ function KernelOption(props: { k: Kernel; blocked: string }): JSX.Element {
 				<span className="t-body leading-5 text-foreground">{k.label}</span>
 				<span className="truncate font-mono t-aux text-muted-foreground" title={k.path}>{k.path || "-"}</span>
 			</span>
-			{!k.available ? <Badge variant="secondary">未安装</Badge> : blocked ? <Badge variant="outline">{blocked}</Badge> : null}
+			{!k.available ? <Badge variant="secondary">未安装</Badge> : blocked ? <Badge variant="outline">{blocked}</Badge> : !speaksCdp(k.family) ? <Badge variant="outline" title="无 CDP: Cookie 注入, 实时预览, 指纹检测不可用; 不支持 headless">无 CDP</Badge> : null}
 		</label>
 	);
 }
 
 /**
- * 内核选择: 按族分两组 (Chromium 系 / Firefox 系), 选项全部来自 GET /api/v1/kernels.
+ * 内核选择: 按族分组 (Chromium 系 / Firefox 系 / WebKit 系), 选项全部来自 GET /api/v1/kernels.
  * lockFamily: 编辑已有环境时只能在同族内换 (换族等于换配置格式, 老的 Preferences 或 user.js 用不上), 另一族置灰.
  */
 export function KernelPicker(props: { kernels: Kernel[]; value: string; onChange: (id: string) => void; lockFamily?: Family }): JSX.Element {

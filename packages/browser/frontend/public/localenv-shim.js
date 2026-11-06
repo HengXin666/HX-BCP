@@ -54,7 +54,7 @@
       proxy: { type: "no_proxy", host: "", port: 0, username: "", password: "", ...(p.proxy || {}) },
       fingerprint: {
         browser: fp.browser || "sun", os: fp.os || "Windows",
-        kernel: fp.kernel || "",
+        kernel: fp.kernel || (fp.browser === "safari" ? "safari" : ""),  // kernel 为空的 safari 旧环境: 与后端 kernels.family_of 同判
         userAgent: fp.user_agent || "", language: fp.language || "",
         timezone: fp.timezone || "", resolution: fp.resolution || "1280x820",
         hardwareConcurrency: fp.hardware_concurrency || 0, deviceMemory: fp.device_memory || 0,
@@ -87,8 +87,10 @@
       password: payload.proxy.password || "",
     };
     if (payload.fingerprint) out.fingerprint = {
-      browser: fp.browser || "sun", os: fp.os, device_type: fp.deviceType,
-      kernel: fp.kernel || "",
+      // 批量编辑只带部分指纹字段: browser/kernel 缺省时必须不送 (undefined 不进 JSON),
+      // 否则后端合并会把 Safari 环境的 kernel 清空、browser 改回 sun, 回落成 Chromium
+      browser: fp.browser || undefined, os: fp.os, device_type: fp.deviceType,
+      kernel: fp.kernel !== undefined ? fp.kernel : (fp.browser === "safari" ? "safari" : undefined),
       user_agent: fp.userAgent, language: fp.language, timezone: fp.timezone,
       resolution: fp.resolution, color_depth: fp.colorDepth,
       hardware_concurrency: fp.hardwareConcurrency, device_memory: fp.deviceMemory,
@@ -96,7 +98,7 @@
       device_scale_factor: fp.browser === "safari" ? Number(fp.deviceScaleFactor) || 0 : undefined,  // sun/flower 不送, 保持脚本按 1.0
       canvas_noise: fp.canvasNoise, audio_noise: fp.audioNoise, webgl_noise: fp.webglNoise,
       webrtc_mode: fp.webrtcMode || "real", webrtc_public_ip: fp.webrtcPublicIp || "",
-      headless: !!fp.headless,
+      headless: fp.headless === undefined ? undefined : !!fp.headless,  // 部分更新不得把 headless 强制改回 false
     };
     if (payload.launch) out.launch = {
       urls: payload.launch.urls || [], extra_args: payload.launch.extraArgs || [],

@@ -11,7 +11,7 @@ import {
 	SelectField,
 } from "@hx/ui";
 import type { Env } from "../../lib/api";
-import type { Kernel } from "../../lib/kernels";
+import { envFamily, type Kernel } from "../../lib/kernels";
 import { KernelPicker } from "./KernelBits";
 
 /**
@@ -94,7 +94,7 @@ export function EnvDialog(props: {
 	const needsFolder = ["move-env", "move-many"].includes(kind);
 	const needsTags = kind === "set-tags" || kind === "add-tags";
 	const needsKernel = kind === "set-kernel";
-	const lockFamily = state?.kind === "set-kernel" ? (state.env.fingerprint?.browser === "flower" ? "gecko" : "blink") : undefined;
+	const lockFamily = state?.kind === "set-kernel" ? envFamily(state.env, props.kernels) : undefined;
 	const canSubmit =
 		!props.busy &&
 		(!needsName || values.name.trim() !== "") &&

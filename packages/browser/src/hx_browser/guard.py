@@ -184,6 +184,10 @@ def effective_user_agent(env: Environment, exe: str) -> str:
     """配置了 UA 就用配置; 没配时按内核真实主版本与 fp.os 拼正常 UA, 读不出版本返回空串, 不编版本号"""
     if env.fingerprint.user_agent:
         return env.fingerprint.user_agent
+    from . import kernels, mac_models  # 局部导入, 避免循环依赖
+
+    if kernels.family_of(env) == kernels.WEBKIT:  # Safari 档: 不能拿 Chromium 主版本拼 Chrome UA
+        return mac_models.safari_user_agent()
     major = kernel_major(exe) if exe else ""
     return ua_for(env.fingerprint.os, major) if major else ""
 
@@ -193,6 +197,10 @@ def webgl_pair(env: Environment) -> tuple[str, str]:
     fp = env.fingerprint
     if fp.webgl_renderer:
         return fp.webgl_vendor or "", fp.webgl_renderer
+    from . import kernels, mac_models  # 局部导入, 避免循环依赖
+
+    if kernels.family_of(env) == kernels.WEBKIT:  # 真 WebKit 只报 Apple GPU
+        return mac_models.WEBGL_VENDOR, mac_models.WEBGL_RENDERER
     pool = WEBGL_BY_OS.get(fp.os, WEBGL_BY_OS["Linux"])
     return pool[int(hashlib.sha256(env.id.encode()).hexdigest()[:8], 16) % len(pool)]
 
