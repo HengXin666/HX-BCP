@@ -20,12 +20,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
         working-directory: web
       - name: Download pinned test data plane
         env:
@@ -41,11 +44,11 @@ jobs:
           printf '%s\n' "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
       - run: go test ./...
       - run: go vet ./...
-      - run: npm run check
+      - run: pnpm run check
         working-directory: web
-      - run: npm run test:runtime
+      - run: pnpm run test:runtime
         working-directory: web
-      - run: npm run build
+      - run: pnpm run build
         working-directory: web
 
   package:
@@ -60,14 +63,17 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
         working-directory: web
-      - run: npm run build
+      - run: pnpm run build
         working-directory: web
       # Bundle and binary names are a contract with scripts/package-release.sh
       # 见 .agents/notes/implemented/architecture/2026-10-13-upgrade-adopts-pre-rename-installation.md
