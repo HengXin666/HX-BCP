@@ -226,6 +226,13 @@ Node
 
 订阅和节点是多对多关系。节点来源变化不会删除节点本体和历史指标。
 
+多对多关系里**只有活动快照的关联行会被保留**: `subscription_nodes` 的每个读取方都把关联行
+与 `status='active'` 的快照连起来, 所以已退休快照的关联行没有可达语义, 刷新在关掉旧快照的同一个
+事务里就把它们清掉。这一条同时是性能要求 —— 退场清扫按 `node_id` 反查
+`subscription_nodes(node_id)`, 留着历史关联行会把它变成 O(节点数 x 关联行数)。快照行本身与
+归档文件仍然保留, 历史"当时包含哪些节点"不再可查。
+见 `.agents/notes/implemented/bug-fix/2026-10-28-snapshot-retire-sweep-cost.md`。
+
 ### 6.4 MetricSnapshot
 
 ```text

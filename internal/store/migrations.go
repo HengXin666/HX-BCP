@@ -1193,6 +1193,28 @@ CREATE TABLE group_members (
 ) STRICT;
 `,
 	},
+	{
+		version: 42,
+		name:    "subscription_nodes_lookup",
+		// The retire sweep is written from the node's point of view ("does any
+		// ACTIVE snapshot still mention me?"), which needs an index that starts
+		// with node_id. Without one, SQLite scanned the covering index
+		// subscription_nodes_subscription once per candidate node, making the
+		// sweep O(nodes x links): a single subscription refresh burned 16s of CPU
+		// on a 2199-node snapshot (measured 2026-10-28).
+		//
+		// The same migration drops the links of every snapshot that is no longer
+		// active. Every reader filters on the active snapshot, so those rows are
+		// pure weight: 82,129 of 84,632 links (97%) on the reported database, and
+		// they kept the sweep slow even with an index available.
+		// See .agents/notes/implemented/bug-fix/2026-10-28-snapshot-retire-sweep-cost.md.
+		sql: `
+CREATE INDEX IF NOT EXISTS subscription_nodes_node ON subscription_nodes(node_id);
+
+DELETE FROM subscription_nodes
+WHERE snapshot_id IN (SELECT id FROM subscription_snapshots WHERE status <> 'active');
+`,
+	},
 }
 
 func (s *Store) migrate(ctx context.Context) error {

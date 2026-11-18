@@ -52,8 +52,10 @@ type Compiled struct {
 	// group carries in this document. It is recorded after a successful
 	// apply and feeds the Retain stage of the next compile.
 	GroupMembers map[string][]string
-	// WithheldEntries are Docker companion entries left out of this
-	// document (see compiler_docker_entries.go).
+	// WithheldEntries are enabled listeners left out of this document: Docker
+	// companions that cannot serve (see compiler_docker_entries.go) and
+	// listeners pinned to a node the document no longer carries (see
+	// compiler_pinned.go).
 	WithheldEntries []WithheldEntry
 }
 
@@ -139,10 +141,20 @@ func (c *Compiler) Compile(ctx context.Context) (Compiled, error) {
 	}
 	members := newMemberResolver(candidates, incumbents, c.clock())
 	members.addFingerprints(nodeRecords)
+	// A listener only reaches compile with a dead pin when the node went away
+	// after the listener was created; that row is withheld rather than failing
+	// the whole document. See compiler_pinned.go.
+	listeners, withheldPinned := withholdPinnedListeners(listeners, nodeRecords)
+	withheldEntries = append(withheldEntries, withheldPinned...)
+	withheldIDs := make(map[string]bool, len(withheldPinned))
+	for _, entry := range withheldPinned {
+		withheldIDs[entry.ListenerID] = true
+	}
 	clientRoutes, err := c.repository.ListResidentialClientRoutes(ctx)
 	if err != nil {
 		return Compiled{}, err
 	}
+	clientRoutes = routesForCompile(clientRoutes, withheldIDs)
 	nodeByID := make(map[string]compiledNode, len(nodeRecords))
 	nodeNameByID := make(map[string]string, len(nodeRecords))
 	proxies := make([]map[string]any, 0, len(nodeRecords))
@@ -223,12 +235,11 @@ func (c *Compiler) Compile(ctx context.Context) (Compiled, error) {
 			return Compiled{}, fmt.Errorf("listener %q references a missing or disabled proxy group", record.Name)
 		}
 		egressName := group.Name
+		// A pin always resolves here: withholdPinnedListeners already removed
+		// every listener whose node this document does not carry, and such a
+		// listener is withheld rather than repointed at its group.
 		if nodeID := strings.TrimSpace(record.NodeID); nodeID != "" {
-			name, exists := nodeNameByID[nodeID]
-			if !exists {
-				return Compiled{}, fmt.Errorf("listener %q is pinned to node %q, which is missing or disabled", record.Name, nodeID)
-			}
-			egressName = name
+			egressName = nodeNameByID[nodeID]
 		}
 		endpointKey := fmt.Sprintf("%s:%d", record.BindAddress, record.Port)
 		if other, exists := usedEndpoints[endpointKey]; exists {

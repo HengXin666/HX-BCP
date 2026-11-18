@@ -72,13 +72,16 @@ func (c *Compiler) gateDockerEntries(ctx context.Context, listeners []store.List
 	return kept, withheld, nil
 }
 
-// Reasons a companion entry is left out of the compiled document.
+// Reasons a listener is left out of the compiled document.
 const (
 	WithheldSourceDisabled = "source_disabled"
 	WithheldBridgeAbsent   = "bridge_absent"
+	// WithheldPinnedNodeUnavailable is an enabled listener whose pinned node is
+	// missing from the compiled proxy set. See compiler_pinned.go.
+	WithheldPinnedNodeUnavailable = "pinned_node_unavailable"
 )
 
-// WithheldEntry is an enabled Docker companion the data plane does not serve.
+// WithheldEntry is an enabled listener the data plane does not serve.
 type WithheldEntry struct {
 	ListenerID string
 	// BindAddress is set for WithheldBridgeAbsent: the gateway address whose

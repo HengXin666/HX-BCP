@@ -240,6 +240,7 @@ func (m *Manager) Apply(ctx context.Context) error {
 		return err
 	}
 	m.withheld.set(compiled.WithheldEntries)
+	m.logWithheldEntries(compiled.WithheldEntries)
 	// Only a configuration Mihomo actually accepted becomes the previous
 	// membership the Retain stage keeps. A failed record never undoes the
 	// apply; it stays pending in memory until a write succeeds.

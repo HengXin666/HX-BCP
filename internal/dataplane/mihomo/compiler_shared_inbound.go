@@ -110,9 +110,10 @@ func (c *Compiler) compileSharedInbounds(
 			continue
 		}
 		group, exists := enabledGroups[record.ProxyGroupID]
-		if !exists {
+		if !exists && strings.TrimSpace(record.NodeID) == "" {
 			// A member whose group was disabled cannot carry traffic; the
-			// listener stays but publishes nothing.
+			// listener stays but publishes nothing. A pinned member does not
+			// dereference its group, so it is compiled from the pin alone.
 			continue
 		}
 		member, err := c.sharedMemberFor(record, group, nodeNameByID)
@@ -230,20 +231,15 @@ func (c *Compiler) sharedMemberFor(
 	// emitting the raw id — is what keeps a rule from pointing at a name that
 	// only exists in the control plane. The lookup reads the same records the
 	// proxy list is built from, so the two cannot drift.
+	// A member whose group is missing or disabled cannot carry traffic and is
+	// dropped by the caller, so the group-backed action is always a live name.
+	// A pin always resolves: the compiler withholds every listener whose node
+	// the document does not carry before it gets here (compiler_pinned.go), and
+	// such a listener is never repointed at its group.
 	action := group.Name
 	groupID := group.ID
 	if nodeID := strings.TrimSpace(record.NodeID); nodeID != "" {
-		name, exists := recordedNodes[nodeID]
-		if !exists {
-			// The compiler refuses the whole configuration when a rule names an
-			// unknown proxy, so this must be an error naming the listener rather
-			// than a rule that takes the data plane down at Mihomo's validation.
-			return sharedMember{}, fmt.Errorf(
-				"listener %q is pinned to node %q, which is missing or disabled",
-				record.Name, nodeID,
-			)
-		}
-		action = name
+		action = recordedNodes[nodeID]
 		groupID = ""
 	}
 	member := sharedMember{

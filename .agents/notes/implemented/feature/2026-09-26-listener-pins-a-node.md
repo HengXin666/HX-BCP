@@ -46,8 +46,16 @@ Status: implemented
 名字是提交进 `proxies` 的那个字符串, ID 只在控制面存在。`Compile` 在装配 `proxies` 的同一次循环里
 填 `nodeNameByID`, 规则生成只读这张表, 因此两者不可能漂移。
 
-**三、节点不存在/被停用时, 编译**失败并指名那条 listener**, 而不是静默降级。**
-Mihomo 自己也不会接受一个指向不存在 proxy 的规则, 所以静默降级既无意义也不安全。
+**三、节点不存在/被停用时, 钉住它的那条 listener 从文档里摘除, 其余配置照常发布。**
+接口边界 (`internal/listener/service.go:425-435`, `normalize`) 已经拒绝 missing/disabled/retired 的
+pin, 所以编译期只可能遇到「创建之后才失效」的那一个 pin —— 订阅刷新把节点退休, 而 pin 留在行上。
+这种行是**一条死数据**, 不是一份坏文档: 为它拒绝整份配置, 代价是其余 listener、以及每一个
+`Apply` 调用方 (包括每 60s 跑一次的节点体检) 一起失败, 而且不会自愈 (2026-10-28 实测:
+probe-resi-01..04 的四个 pin 指向被订阅刷新退休的节点, 12 天里刷出 5,389 行这类失败)。
+摘除的 listener 不进 `listeners`、不占端口、不产生 client route/rule, 经
+`WithheldEntry{Reason: WithheldPinnedNodeUnavailable}` 上报, `Manager.Apply` 每次应用打**一条**
+Warn 列出被摘除的 id 与原因。**绝不回落到它行上的组**: 钉住一个出口却到不了, 就不能改成发布
+另一个出口 —— 那样调用方拿到的仍是 200 和一个能用的出口, 只是出口错了。
 
 **四、版本 38 用 `ALTER TABLE ADD COLUMN`, 不用 33 号迁移的 create/copy/drop/rename。**
 本表在线上库里的唯一索引有**可证的重复项** (`listeners_dedicated_endpoint` 与
@@ -90,8 +98,13 @@ INSERT INTO l VALUES('a',NULL,NULL);
   `proxy [...] not found` 并**整份配置被拒** (即数据面全挂)。
 - **让 `node_id` 与 `proxy_group_id` 必须同时提供, 由服务端校验两者一致。** 否决: 这正是
   用户要消灭的弯子; 而且「组」与「节点」在语义上并非同一层, 强求一致没有可判定的含义。
-- **节点消失时回落到组。** 否决: 会静默把流量送到**另一个出口**。对「注册全程同 IP」这类
-  硬需求, 静默换出口比编译失败危险得多。
+- **节点消失时回落到组。** 它最强的理由是**不丢服务**: 端口继续开着, 调用方不会被 502 打脸,
+  而且实现只是把 `egressName` 留在组名上。否决: 会静默把流量送到**另一个出口**。对「注册全程
+  同 IP」这类硬需求, 静默换出口比不服务危险得多 —— 故障是可观测的, 换出口不是。
+- **节点消失时让整份配置失败 (本次改掉的旧行为)。** 它最强的理由是**绝不发布半份文档**:
+  Mihomo 不接受指向不存在 proxy 的规则, 失败即说明数据面确实没法完整提供服务。
+  否决: 整份失败把**一条**死数据的代价放大到**全部** listener 和每个 `Apply` 调用方,
+  而且它不会自愈 —— 没人改那一行, 每次重试都以同样方式失败 (12 天 5,389 行)。
 
 ## Consequences
 
@@ -116,10 +129,12 @@ INSERT INTO l VALUES('a',NULL,NULL);
 - **创建后自动 reconcile, 不需要重启**: `Create` 触发 `reconciler.Apply`, 7890 在创建前已停、
   创建后立即在监听。这一点经实测确认 (对照组: 手动重启后才恢复监听)。
 
-**编译期校验真的会拦住坏数据 (意外取得的一次实测)**: 修好之前的中间版本里,
-节点名映射没有被填进 `Compile`, 创建就返回了
-`listener "…" is pinned to node "…", which is missing or disabled`, 并自动回滚了已建的行。
-这既是那段校验生效的证据, 也说明**它在编译期拦下的代价只是创建失败, 不会波及数据面**。
+**坏 pin 的代价被限制在那一条 listener 上**: 创建期的 `normalize` 仍会拒绝 missing/disabled/retired
+的 pin (实测过一次: 中间版本里节点名映射没填进 `Compile`, 创建即失败并回滚了已建的行);
+编译期碰上「创建后才失效」的 pin 时只摘除那一条, 其余文档照常发布。
+两处判定因此必须**语义一致**: 创建期是拒绝 (调用方就在现场, 可以立刻改), 编译期是摘除
+(能改这行的人不在现场, 而整份文档的可用性必须优先)。
+摘除结果随每次编译重算, 所以节点回来或 pin 被改掉之后, 那条 listener 会自己回到文档里。
 
 **依赖数据流的纪律**: 节点名映射必须是 `Compile` 里的局部变量一路**显式传参**
 (`compileSharedInbounds` 的 `nodeNameByID` 形参), 不能放在 `Compiler` 结构体上由 `Compile` 顺手赋值 ——
@@ -135,7 +150,7 @@ INSERT INTO l VALUES('a',NULL,NULL);
 **未覆盖 / 待后人验证**:
 
 - 只有单节点 pin, 没有「多个节点按优先级」的表达 —— 那仍属于组的职责。
-- 编译期校验发生在 `Compile`; 创建期校验在 `normalize` (会拒绝 missing/disabled/retired 节点)。
-  两条路径都覆盖了, 但**没有**覆盖「节点在编译后被停用」这一瞬时状态 —— 那种情况走的是
-  下一次编译失败, 表现为数据面拒绝整份配置。这是既有语义 (`applyMigration`/Manager 的失败处理),
-  本次不改。
+- 被摘除的 listener 只在 `Manager.Apply` 的日志里可见; API 的 listener 列表仍按行返回它,
+  不区分「在服务」与「被摘除」。Docker 伴生 entry 那条路径有 `DockerAccessWithheld` 之类的显式
+  字段, pin 这条还没有 —— 要让调用方看见同一个事实, 得再开一个只读投影, 本次没做。
+- 摘除只针对 pin。未钉 listener 的组失效、端点重复、WebSocket 路由重复、依赖环仍旧是致命错误。

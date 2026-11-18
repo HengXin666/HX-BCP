@@ -60,6 +60,10 @@ WHERE subscription_id = ? AND status = 'active'
 `, record.SubscriptionID); err != nil {
 		return fmt.Errorf("retire previous subscription snapshot: %w", err)
 	}
+	// Agent Note: ../../.agents/notes/implemented/bug-fix/2026-10-28-snapshot-retire-sweep-cost.md
+	if err := pruneInactiveSnapshotLinks(ctx, transaction, record.SubscriptionID, record.ID); err != nil {
+		return err
+	}
 	if _, err := transaction.ExecContext(ctx, `
 INSERT INTO subscription_snapshots(
     id,
@@ -139,6 +143,9 @@ SET status = 'retired'
 WHERE subscription_id = ? AND status = 'active' AND id <> ?
 `, subscriptionID, snapshotID); err != nil {
 		return fmt.Errorf("retire active subscription snapshot: %w", err)
+	}
+	if err := pruneInactiveSnapshotLinks(ctx, transaction, subscriptionID, snapshotID); err != nil {
+		return err
 	}
 	result, err := transaction.ExecContext(ctx, `
 UPDATE subscription_snapshots

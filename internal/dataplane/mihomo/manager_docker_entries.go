@@ -51,6 +51,27 @@ func (s *dockerEntryState) waitingAddresses() []string {
 	return out
 }
 
+// logWithheldEntries records the listeners the applied document leaves out. It
+// is one line per apply on purpose: withheld rows are few, and a per-listener
+// line would turn a single retired node into a log flood of its own.
+func (m *Manager) logWithheldEntries(entries []WithheldEntry) {
+	if len(entries) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(entries))
+	reasons := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		ids = append(ids, entry.ListenerID)
+		reasons = append(reasons, entry.Reason)
+	}
+	m.logger.Warn(
+		"listeners withheld from the mihomo document",
+		"component", "dataplane",
+		"listener_ids", ids,
+		"reasons", reasons,
+	)
+}
+
 // DockerEntryWithheld reports whether the running document leaves out the
 // Docker companion entry with this listener id, and why.
 func (m *Manager) DockerEntryWithheld(listenerID string) (string, bool) {

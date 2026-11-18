@@ -174,6 +174,31 @@ WHERE subscription_id = ? AND status = 'active'
 `, subscriptionID); err != nil {
 		return fmt.Errorf("retire previous subscription snapshot: %w", err)
 	}
+	return pruneInactiveSnapshotLinks(ctx, transaction, subscriptionID, "")
+}
+
+// pruneInactiveSnapshotLinks drops the node links of snapshots that are no
+// longer active for one subscription. keepSnapshotID is preserved even when it
+// is not active yet, because the caller is about to (re)activate it and re-add
+// its links.
+//
+// Every reader of subscription_nodes filters on the ACTIVE snapshot (the retire
+// sweep, source_count, node sources, group candidates, source classes), so a
+// retired snapshot's links are unreachable weight. They were not free: on the
+// reported database 82,129 of 84,632 links (97%) belonged to retired snapshots,
+// and the retire sweep had to walk them for every candidate node.
+//
+// Agent Note: ../../.agents/notes/implemented/bug-fix/2026-10-28-snapshot-retire-sweep-cost.md
+func pruneInactiveSnapshotLinks(ctx context.Context, transaction *sql.Tx, subscriptionID, keepSnapshotID string) error {
+	if _, err := transaction.ExecContext(ctx, `
+DELETE FROM subscription_nodes
+WHERE snapshot_id IN (
+    SELECT id FROM subscription_snapshots
+    WHERE subscription_id = ? AND status <> 'active' AND id <> ?
+)
+`, subscriptionID, keepSnapshotID); err != nil {
+		return fmt.Errorf("prune inactive snapshot links: %w", err)
+	}
 	return nil
 }
 
@@ -319,6 +344,9 @@ SET status = 'retired'
 WHERE subscription_id = ? AND status = 'active' AND id <> ?
 `, record.SubscriptionID, record.ID); err != nil {
 		return fmt.Errorf("retire active parsed snapshot: %w", err)
+	}
+	if err := pruneInactiveSnapshotLinks(ctx, transaction, record.SubscriptionID, record.ID); err != nil {
+		return err
 	}
 	result, err := transaction.ExecContext(ctx, `
 UPDATE subscription_snapshots
