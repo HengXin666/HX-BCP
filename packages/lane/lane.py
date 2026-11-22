@@ -28,6 +28,8 @@ HEADER_HUMAN_TOKEN = "x-bcp-human-token"
 AGENT_GROUP_PREFIX = "agent:"
 SESSION_COOKIE = "bcp_human"
 SESSION_LABEL = b"bcp-console-session:"
+UNLOCK_LABEL = b"bcp-console-unlock:"
+UNLOCK_TTL_S = 10 * 60
 
 
 @dataclass
@@ -104,6 +106,32 @@ def session_valid(value: str, path: Path | None = None, now: float | None = None
     return secrets.compare_digest(mac, _session_mac(key, stamp))
 
 
+def unlock_code(path: Path | None = None, now: float | None = None) -> str:
+    """Short lived console unlock code "<unix>.<hmac16>" keyed by the local token, empty without a token.
+
+    Printed by hxb serve and bcp-lane unlock-url as a link, so the person opening the console
+    locally does not paste the token. Valid for UNLOCK_TTL_S, never contains the token.
+    """
+    key = read_human_token(path)
+    if not key:
+        return ""
+    stamp = str(int(time.time() if now is None else now))
+    return stamp + "." + hmac.new(key.encode(), UNLOCK_LABEL + stamp.encode(), hashlib.sha256).hexdigest()[:16]
+
+
+def unlock_valid(code: str, path: Path | None = None, now: float | None = None) -> bool:
+    """True when code came from unlock_code with the current token and is younger than UNLOCK_TTL_S."""
+    key = read_human_token(path)
+    stamp, _, mac = (code or "").strip().partition(".")
+    if not key or not stamp.isdigit() or len(mac) != 16:
+        return False
+    age = (time.time() if now is None else now) - int(stamp)
+    if age < 0 or age > UNLOCK_TTL_S:
+        return False
+    want = hmac.new(key.encode(), UNLOCK_LABEL + stamp.encode(), hashlib.sha256).hexdigest()[:16]
+    return secrets.compare_digest(mac, want)
+
+
 def same_origin(host: str, origin: str = "", fetch_site: str = "") -> bool:
     """True only for a request a browser sent from a page of this same origin.
 
@@ -156,7 +184,7 @@ def loopback_admitted(peer: str, host: str) -> bool:
 
 def decide(lane: str, token: str = "", project: str = "",
            path: Path | None = None, session: str = "", from_self: bool = False,
-           loopback: bool = False) -> Decision:
+           loopback: bool = False, agent_credential: bool = False) -> Decision:
     """判定这次请求属于哪条通道, 是否放行.
 
     The lane is chosen by the x-bcp-lane header alone, loopback never switches a request into the
@@ -167,8 +195,15 @@ def decide(lane: str, token: str = "", project: str = "",
       2. session: a valid console session cookie sent from a same-origin page (from_self),
       3. token: the token header equals the local token.
     They are alternatives, not layers, so the order only decides what audit says.
+    loopback is only passed True when the server enables settings.human_loopback (off by default,
+    since every local script is a loopback peer). agent_credential (the request carries x-api-key)
+    pins the request to the agent lane: an api caller can never ask for the human lane.
     """
     want = (lane or AGENT).strip().lower()
+    if want == HUMAN and agent_credential:
+        return Decision(False, HUMAN, code="lane_forbidden",
+                        reason="带 x-api-key 的请求属于 Agent 通道, 不能声明人类通道",
+                        audit={"lane": HUMAN, "at": time.time()})
     if want == HUMAN:
         by = ("loopback" if loopback else "session" if from_self and session_valid(session, path)
               else "token" if human_token_valid(token, path) else "")
@@ -219,11 +254,20 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest='cmd', required=True)
     sub.add_parser('issue', help='generate a new local human token, the old one stops working')
     sub.add_parser('check', help='report whether a local human token exists')
+    url = sub.add_parser('unlock-url', help='print a console link valid for 10 minutes, the token is not in it')
+    url.add_argument('--base', default='http://127.0.0.1:8325/', help='console address')
     args = parser.parse_args(argv)
     file = args.path or TOKEN_FILE
     if args.cmd == 'issue':
         issue_human_token(file)
         print(f'issued, file={file}, mode={oct(file.stat().st_mode & 0o777)}')
+        return 0
+    if args.cmd == 'unlock-url':
+        code = unlock_code(file)
+        if not code:
+            print(f'missing, file={file}, run: bcp-lane issue')
+            return 1
+        print(args.base.rstrip('/') + '/#/unlock?code=' + code)
         return 0
     if read_human_token(file):
         print(f'present, file={file}')
