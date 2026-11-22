@@ -1,16 +1,31 @@
 import { useCallback, useEffect, useState } from "react";
 import type { EnvProxy, Result } from "./api";
 import { checkExit, type ExitCheck } from "./api-write";
+import { onInvalidate, onPatch, peek, type KeyedLoader } from "./cache";
 
-/** 拉一次数据并按 5 秒轮询, 返回最近一次成功结果, 是否首屏加载, 最近一次轮询错误, 以及写操作后立即重拉的 reload. */
+/**
+ * 拉一次数据并按 intervalMs 轮询, 返回最近一次成功结果, 是否首屏加载, 最近一次轮询错误, 以及写操作后立即重拉的 reload.
+ * load 带 cacheKey (见 cache.keyed) 时: 挂载先用会话缓存出数, 缓存比一个轮询周期新就不立刻发请求;
+ * 该键被写操作失效时立即重拉; 被乐观更新就地改写 (cache.patch) 时直接换成缓存里的新数据, 不发请求. 卸载时取消在飞请求.
+ */
 export function usePoll<T>(load: (signal: AbortSignal) => Promise<Result<T>>, intervalMs = 5000) {
-	const [state, setState] = useState<{ result: Result<T> | null; loading: boolean; error: string }>({
-		result: null,
-		loading: true,
-		error: "",
+	const key = (load as KeyedLoader<T>).cacheKey;
+	const [state, setState] = useState<{ result: Result<T> | null; loading: boolean; error: string }>(() => {
+		const hit = key ? peek<T>(key) : null;
+		return hit ? { result: { ok: true, data: hit.data }, loading: false, error: "" } : { result: null, loading: true, error: "" };
 	});
 	const [tick, setTick] = useState(0);
 	const reload = useCallback(() => setTick((n) => n + 1), []);
+
+	useEffect(() => (key ? onInvalidate(key, reload) : undefined), [key, reload]);
+
+	useEffect(() => {
+		if (!key) return undefined;
+		return onPatch(key, () => {
+			const hit = peek<T>(key);
+			if (hit) setState((prev) => ({ ...prev, result: { ok: true, data: hit.data }, loading: false }));
+		});
+	}, [key]);
 
 	useEffect(() => {
 		const ctl = new AbortController();
@@ -20,26 +35,29 @@ export function usePoll<T>(load: (signal: AbortSignal) => Promise<Result<T>>, in
 		const pull = (): void => {
 			load(ctl.signal)
 				.then((result) => {
-					// 轮询失败时保留上一份成功数据, 只记下错误, 表格不闪成空白
-					if (alive) setState((prev) => (result.ok || !prev.result?.ok ? { result, loading: false, error: "" } : { ...prev, error: result.error }));
+					// 轮询失败时保留上一份成功数据, 只记下错误, 表格不闪成空白; 主动取消不算错误
+					if (!alive) return;
+					setState((prev) => (result.ok || !prev.result?.ok ? { result, loading: false, error: "" } : { ...prev, error: result.error }));
 				})
 				.then(() => {
 					if (alive) timer = setTimeout(pull, intervalMs);
 				});
 		};
 
-		pull();
+		// 首轮: 缓存够新就等到它过期再拉, 切页回来不重复请求; reload 触发 (tick > 0) 时总是立刻拉
+		const hit = key && tick === 0 ? peek<T>(key) : null;
+		if (hit && hit.age < intervalMs) timer = setTimeout(pull, intervalMs - hit.age);
+		else pull();
 		return () => {
 			alive = false;
 			ctl.abort();
 			if (timer) clearTimeout(timer);
 		};
-	}, [load, intervalMs, tick]);
+	}, [load, key, intervalMs, tick]);
 
 	return { ...state, reload };
 }
 
-/** 出口检测结果按上游键缓存在本页: 同一个上游只测一次, 表格的链路条与详情面板共用. 并发上限 4. */
 /**
  * 出口检测结果按上游共享, 并且整个控制台共用一份 (模块级仓库): 状态页测过的出口, 回到浏览器页直接可用于筛选,
  * 不用再测一遍. 同一上游正在测时不重复发请求. 键是 lib/chain.upstreamKey (不含凭据).

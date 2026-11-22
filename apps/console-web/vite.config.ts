@@ -10,6 +10,7 @@ import tailwindcss from "@tailwindcss/vite";
 const PORT = 8940;
 const TOKEN_FILE = process.env.BCP_HUMAN_TOKEN_FILE ?? join(homedir(), ".bcp", "human.token");
 const OUT_DIR = fileURLToPath(new URL("../../packages/browser/src/hx_browser/web", import.meta.url));
+const SRC = fileURLToPath(new URL("./src", import.meta.url));
 const SELF_ORIGINS = new Set(["http://127.0.0.1:" + PORT, "http://localhost:" + PORT]);
 
 /** 每次转发都现读本机人类令牌, 读不到给空串, 后端回 401 human_token_required. 令牌不进打包产物. */
@@ -37,6 +38,15 @@ function tagHuman(proxyReq: { setHeader(name: string, value: string): void }, re
 	proxyReq.setHeader("x-bcp-human-token", fromConsole(req) ? humanToken() : "");
 }
 
+/** 第三方依赖按库拆成独立分包, 业务代码换版时公共库缓存不失效. */
+function vendorChunk(id: string): string | undefined {
+	if (!id.includes("node_modules")) return undefined;
+	if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return "vendor-react";
+	if (id.includes("@hx/ui") || id.includes("hx-ui")) return "vendor-hx-ui";
+	if (id.includes("lucide-react")) return "vendor-icons";
+	return "vendor";
+}
+
 /**
  * 控制台: 组件与样式全部来自 @hx/ui 的发布产物. 前端只发相对路径 api/v1, 直连 8325 时就是 /api/v1.
  * base "./" 让产物里的资源引用全是相对路径, 直连 / 与 HX-WebX 的 /proxy/hx-browser/ 两种根都能用.
@@ -45,7 +55,19 @@ function tagHuman(proxyReq: { setHeader(name: string, value: string): void }, re
 export default defineConfig({
 	base: "./",
 	plugins: [react(), tailwindcss()],
-	build: { outDir: OUT_DIR, emptyOutDir: true },
+	/** 路径别名, 与 tsconfig.json 的 paths 一一对应: @/ 指 src, @lib/ 指 src/lib, @pages/ 指 src/pages. */
+	resolve: {
+		alias: [
+			{ find: /^@lib\//, replacement: SRC + "/lib/" },
+			{ find: /^@pages\//, replacement: SRC + "/pages/" },
+			{ find: /^@\//, replacement: SRC + "/" },
+		],
+	},
+	build: {
+		outDir: OUT_DIR,
+		emptyOutDir: true,
+		rollupOptions: { output: { manualChunks: vendorChunk } },
+	},
 	server: {
 		port: PORT,
 		host: "127.0.0.1",

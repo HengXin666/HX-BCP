@@ -1,6 +1,7 @@
 /**
  * 浏览器内核: 列表只读 GET /api/v1/kernels (后端 kernels.list_kernels), 前端不维护内核清单.
- * 族决定怎么配置 (blink: Preferences JSON + CDP; gecko: user.js + 远程调试协议), 内核只决定用哪个二进制.
+ * 族决定怎么配置 (blink: Preferences JSON + CDP; gecko: user.js + 远程调试协议; webkit: 本机 Playwright WebKit 构建经 runner 启动,
+ * 或外部应用 Safarier 经它的 CLI 启动), 内核只决定用哪个二进制.
  * 每个环境实际用哪个内核, 判据与后端 kernels.resolve_executable 一致:
  *   fingerprint.kernel 有值 -> 就是它 (指定)
  *   为空 (旧环境) -> 族按 fingerprint.browser (flower = gecko, safari = webkit, 其余 blink),
@@ -9,10 +10,35 @@
  */
 import { createContext } from "react";
 import { API, getEnvelope, type Env, type Result } from "./api";
+import { KEYS, invalidate, keyed } from "./cache";
+import { sendCompat } from "./http";
 
 export type Family = "blink" | "gecko" | "webkit";
 
-export type Kernel = { id: string; label: string; family: Family; path: string; available: boolean };
+/** 一项能力在这个内核上是否可用; 判据在后端 kernels.FEATURES. */
+export type KernelFeatures = Partial<Record<"cdp" | "live_view" | "cookies" | "sandbox" | "fingerprint_check" | "proxy" | "agent_cli", boolean>>;
+
+/**
+ * 后端 kernels.list_kernels 的一行. source: configured (设置里填了路径) / detected (自动探测) / missing.
+ * mode: binary (我们起进程) / runner (本机 runner 进程, 如 Linux WebKit) / external (外部应用自管进程与 profile, 如 Safarier). 旧后端没有的字段都是可选.
+ */
+export type Kernel = {
+	id: string;
+	label: string;
+	family: Family;
+	path: string;
+	available: boolean;
+	mode?: "binary" | "runner" | "external";
+	configured?: string;
+	source?: "configured" | "detected" | "missing";
+	note?: string;
+	how?: string;
+	features?: KernelFeatures;
+	default?: boolean;
+	envs?: number;
+};
+
+export type KernelsDetail = { kernels: Kernel[]; default: string; inherit: { envs: number; blink: string; gecko: string } };
 
 type FamilyStyle = { name: string; how: string; dot: string; chip: string };
 
@@ -20,7 +46,7 @@ type FamilyStyle = { name: string; how: string; dot: string; chip: string };
 export const FAMILY: Record<Family, FamilyStyle> = {
 	blink: { name: "Chromium 系", how: "Preferences JSON + CDP", dot: "bg-sky-500", chip: "border-sky-500/40 bg-sky-500/10 text-sky-500" },
 	gecko: { name: "Firefox 系", how: "user.js + 远程调试协议", dot: "bg-orange-500", chip: "border-orange-500/40 bg-orange-500/10 text-orange-500" },
-	webkit: { name: "WebKit 系", how: "用户脚本注入, 无 CDP / 无 headless", dot: "bg-violet-500", chip: "border-violet-500/40 bg-violet-500/10 text-violet-500" },
+	webkit: { name: "WebKit 系", how: "MiniBrowser 用户脚本 / 本机 runner / Safarier CLI, 均无 CDP", dot: "bg-violet-500", chip: "border-violet-500/40 bg-violet-500/10 text-violet-500" },
 };
 
 export const FAMILIES: Family[] = ["blink", "gecko", "webkit"];
@@ -49,20 +75,55 @@ export function envFamily(env: Env, kernels: Kernel[]): Family {
 	return k ? k.family : legacyFamily(fp.browser);
 }
 
-export function listKernels(signal?: AbortSignal): Promise<Result<Kernel[]>> {
-	return getEnvelope<{ kernels: Kernel[] }>(API + "/kernels", signal).then((r) => (r.ok ? { ok: true, data: r.data?.kernels ?? [] } : r));
-}
+/** 能力名的中文, 内核页与选择器共用. */
+export const FEATURE_LABEL: Record<keyof KernelFeatures, string> = {
+	cdp: "CDP 接管",
+	live_view: "实时预览",
+	cookies: "Cookie 注入",
+	sandbox: "沙箱隔离",
+	fingerprint_check: "指纹体检",
+	proxy: "代理",
+	agent_cli: "自带 Agent CLI",
+};
+
+/** 内核管理页的完整数据 (含每个内核被多少环境使用, 默认内核, 继承环境数). */
+export const kernelsDetail = keyed<KernelsDetail>(KEYS.kernels + ":detail", 10000, (signal) =>
+	getEnvelope<KernelsDetail>(API + "/kernels", signal).then((r): Result<KernelsDetail> =>
+		r.ok ? { ok: true, data: { kernels: r.data?.kernels ?? [], default: r.data?.default ?? "", inherit: r.data?.inherit ?? { envs: 0, blink: "", gecko: "" } } } : r,
+	),
+);
+
+export type ProbeResult = { id: string; ok: boolean; version?: string; error?: string; profiles?: number; running?: number };
+
+/** 内核写操作: 只有人类通道能调, 成功后整组 kernels 缓存作废 (列表与详情一起重拉). */
+export const kernelApi = {
+	setPath: async (id: string, path: string): Promise<Result<Kernel>> => {
+		const r = await sendCompat<Kernel>("PUT", "/kernels/" + encodeURIComponent(id) + "/path", { path });
+		if (r.ok) invalidate(KEYS.kernels);
+		return r;
+	},
+	setDefault: async (id: string): Promise<Result<{ default: string }>> => {
+		const r = await sendCompat<{ default: string }>("PUT", "/kernels/" + encodeURIComponent(id) + "/default");
+		if (r.ok) invalidate(KEYS.kernels);
+		return r;
+	},
+	probe: (id: string): Promise<Result<ProbeResult>> => sendCompat<ProbeResult>("POST", "/kernels/" + encodeURIComponent(id) + "/probe"),
+};
+
+/** 内核清单很少变, 会话内 25 秒新鲜期. */
+export const listKernels = keyed<Kernel[]>(KEYS.kernels, 25000, (signal) =>
+	getEnvelope<{ kernels: Kernel[] }>(API + "/kernels", signal).then((r): Result<Kernel[]> => (r.ok ? { ok: true, data: r.data?.kernels ?? [] } : r)),
+);
 
 /** 旧环境继承的可执行路径. GET /settings 还带别的字段 (含 api_key), 这里当场只取这三个, 其余丢弃. */
 export type KernelPaths = Record<Family, string>;
 
-export function kernelPaths(signal?: AbortSignal): Promise<Result<KernelPaths>> {
-	return getEnvelope<{ chromium_path?: string; firefox_path?: string; kernel_paths?: Record<string, string> }>(API + "/settings", signal).then((r) =>
-		r.ok
-			? { ok: true, data: { blink: r.data?.chromium_path ?? "", gecko: r.data?.firefox_path ?? "", webkit: r.data?.kernel_paths?.safari ?? "" } }
-			: r,
-	);
-}
+/** 键挂在 settings 下: 保存设置后 invalidate(settings) 一并作废. 缓存里只存路径, 不存 api_key. */
+export const kernelPaths = keyed<KernelPaths>(KEYS.settings + ":paths", 25000, (signal) =>
+	getEnvelope<{ chromium_path?: string; firefox_path?: string; kernel_paths?: Record<string, string> }>(API + "/settings", signal).then((r): Result<KernelPaths> =>
+		r.ok ? { ok: true, data: { blink: r.data?.chromium_path ?? "", gecko: r.data?.firefox_path ?? "", webkit: r.data?.kernel_paths?.safari ?? "" } } : r,
+	),
+);
 
 const INHERIT_KEY: Record<Family, string> = { blink: "chromium_path", gecko: "firefox_path", webkit: "kernel_paths.safari" };
 
@@ -102,10 +163,14 @@ export function kernelView(env: Env, kernels: Kernel[], paths: KernelPaths | nul
 /** 列表各处读同一个判定函数, 由浏览器页提供. 默认值只在没包 Provider 时用到. */
 export const KernelContext = createContext<(env: Env) => KernelView>((env) => kernelView(env, [], null));
 
-/** 新建时的默认内核: cloak 可用就用 cloak, 否则第一个可用的. */
+/** 新建时的默认内核: 后端标了 default 就用它 (内核页可改), 否则 cloak 可用就用 cloak, 否则第一个可用的. */
 export function defaultKernel(kernels: Kernel[]): string {
-	return kernels.find((k) => k.id === "cloak" && k.available)?.id ?? kernels.find((k) => k.available)?.id ?? "";
+	return kernels.find((k) => k.default && k.available)?.id ?? kernels.find((k) => k.id === "cloak" && k.available)?.id ?? kernels.find((k) => k.available)?.id ?? "";
 }
+
+/** 环境当前所属族: 指定了已登记内核就按内核, 否则按旧 browser 字段. 切换内核时只能在同族里换. */
+/** 旧名, 同 envFamily */
+export const familyOf = envFamily;
 
 /** 写回后端的指纹片段: kernel 加上与之对应的旧 browser 字段 (后端 legacy_browser_for: gecko = flower, webkit = safari, 其余 sun). */
 export function kernelPatch(k: Kernel | undefined): { kernel: string; browser: string } | null {

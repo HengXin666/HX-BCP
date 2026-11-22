@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import { Bot, Check, Cpu, Ellipsis, FolderInput, Lock, PanelRightOpen, Pencil, Play, RefreshCw, SlidersHorizontal, Square, Tags, Trash2, X } from "lucide-react";
+import { Bot, Check, Cpu, Ellipsis, FolderInput, Lock, PanelRightOpen, Pencil, Play, RefreshCw, ShieldAlert, SlidersHorizontal, Square, Tags, Trash2, X } from "lucide-react";
 import {
 	Badge,
 	Button,
@@ -12,6 +12,7 @@ import {
 	Spinner,
 } from "@hx/ui";
 import type { Env } from "../../lib/api";
+import { LEAK_TEXT } from "../../lib/fp-form";
 import { isRunning } from "../../lib/env-query";
 import { usePending } from "./useEnvActions";
 
@@ -60,6 +61,31 @@ export function NameCell({ env }: { env: Env }): JSX.Element {
 }
 
 /**
+ * 启动后 DNS 泄漏探针: 解析服务器不在出口国家或 ASN 时红 badge "DNS 泄漏"; 探针跑完却没有证据
+ * (服务不可用, 代理不通, Gecko 内核) 时黄 badge "DNS 未验证", unknown 不当通过. 探测中与未挂代理不占列宽.
+ */
+function DnsLeakBadge({ env }: { env: Env }): JSX.Element | null {
+	const r = env.runtime?.dns_leak as { status?: string; value?: string; detail?: string } | undefined;
+	const title = [r?.value, r?.detail].filter(Boolean).join("\n");
+	if (r?.status === "error") return <Badge variant="destructive" data-dns-leak="error" title={title}>DNS 泄漏</Badge>;
+	if (r?.status === "unknown" && r.value !== "探测中") return <Badge variant="warning" data-dns-leak="unknown" title={title}>DNS 未验证</Badge>;
+	return null;
+}
+
+/** 防泄漏没全开时的盾牌图标: 未确认的老环境标红, 人为确认或本机做不到的标黄; 每一项与原因进 title. */
+function LeakIcon({ env }: { env: Env }): JSX.Element | null {
+	const l = env.leak;
+	if (!l || l.guarded) return null;
+	const loud = l.exposures.some((k) => !l.acked.includes(k) && !l.unavoidable[k]);
+	const why = l.exposures.map((k) => (LEAK_TEXT[k] ?? k) + (l.unavoidable[k] ? " (本机: " + l.unavoidable[k] + ")" : l.acked.includes(k) ? " (已确认)" : " (未确认)"));
+	return (
+		<span data-leak={loud ? "open" : "acked"} title={why.join("\n")} aria-label="防泄漏未全开">
+			<ShieldAlert className={"size-4 " + (loud ? "text-destructive" : "text-warning")} />
+		</span>
+	);
+}
+
+/**
  * 状态格: 四种状态四种样子, 不再一片灰. API 占用 = 黄 badge + 机器人图标; 运行中 = 绿点 + 绿 badge;
  * 待重启 = 描边 badge + 刷新图标; 已停止 = 空心点 + 灰字 (不用 badge).
  */
@@ -69,6 +95,8 @@ export function StatusCell({ env }: { env: Env }): JSX.Element {
 			<span data-status-badge="busy" className="flex items-center gap-2 animate-in fade-in-0 duration-200" title={"api 或 mcp 自 " + when(env.in_use_since) + " 起占用"}>
 				<SessionStatusDot status="pending-input" />
 				<Badge variant="warning"><Bot className="size-3" />API 占用</Badge>
+				<DnsLeakBadge env={env} />
+				<LeakIcon env={env} />
 			</span>
 		);
 	}
@@ -79,6 +107,8 @@ export function StatusCell({ env }: { env: Env }): JSX.Element {
 			<span data-status-badge="running" className="flex items-center gap-2 animate-in fade-in-0 duration-200">
 				<SessionStatusDot status="running" className="overflow-hidden rounded-full" />
 				<Badge variant="success">运行中</Badge>
+				<DnsLeakBadge env={env} />
+				<LeakIcon env={env} />
 				{restart}
 			</span>
 		);
@@ -87,6 +117,7 @@ export function StatusCell({ env }: { env: Env }): JSX.Element {
 		<span data-status-badge="idle" className="flex items-center gap-2 t-aux text-muted-foreground animate-in fade-in-0 duration-200">
 			<SessionStatusDot status="idle" />
 			<span title={env.last_open_at ? "上次打开 " + when(env.last_open_at) : "创建于 " + when(env.created_at) + ", 从未打开"}>{env.last_open_at ? "已停止" : "未启动"}</span>
+			<LeakIcon env={env} />
 			{restart}
 		</span>
 	);

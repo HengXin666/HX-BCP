@@ -6,6 +6,7 @@
 import { useEffect, useState, type JSX, type ReactNode } from "react";
 import { Save } from "lucide-react";
 import { Button, EmptyState, InputField, SettingSection, Switch, toast } from "@hx/ui";
+import { PageLoading } from "../PageLoading";
 import { systemApi, type Settings } from "../../lib/api-res";
 import { usePoll } from "../../lib/hooks";
 
@@ -43,7 +44,7 @@ export function SettingsPage(): JSX.Element {
 	useEffect(() => setD(base ? { ...base, api_key: "" } : null), [base]);
 
 	if (res.result && !res.result.ok) return <EmptyState text="未连接" hint={"GET /api/v1/settings 失败: " + res.result.error} />;
-	if (!base || !d) return <EmptyState text="加载中" />;
+	if (!base || !d) return <PageLoading />;
 	const set = <K extends keyof Draft>(k: K, v: Draft[K]): void => setD({ ...d, [k]: v });
 	const patch: Partial<Settings> = {};
 	for (const k of Object.keys(d) as (keyof Draft)[]) {
@@ -62,7 +63,7 @@ export function SettingsPage(): JSX.Element {
 	};
 
 	return (
-		<div className="flex flex-col gap-4" data-sys-page="settings">
+		<div className="flex min-w-0 flex-col gap-4" data-sys-page="settings">
 			<SettingSection section={{ id: "paths", title: "路径与端口" }}>
 				<div className="flex flex-col gap-3">
 					{TEXT.map((f) => (

@@ -4,7 +4,7 @@ import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogH
 import type { Env } from "../../lib/api";
 import { BLANK_FORM, bodyOf, formOf, problems, type FpForm } from "../../lib/fp-form";
 import { defaultKernel, envFamily, type Kernel } from "../../lib/kernels";
-import { AdvancedSection, BasicSection, DeviceSection, FingerprintSection } from "./FpSections";
+import { AdvancedSection, BasicSection, DeviceSection, FingerprintSection, LeakConfirm } from "./FpSections";
 
 /** 新建 (env 为空, 带初始文件夹) 或编辑一个人类组浏览器. */
 export type FpTarget = { mode: "create"; folder: string } | { mode: "edit"; env: Env } | null;
@@ -39,7 +39,7 @@ export function FpDialog(props: {
 	useEffect(() => (setForm(fresh()), setStep(0)), [target]);
 
 	const set = (patch: Partial<FpForm>): void => setForm((f) => ({ ...f, ...patch }));
-	const issues = problems(form);
+	const issues = problems(form, before);
 	const kernelOk = !form.kernel || props.kernels.some((k) => k.id === form.kernel && k.available);
 	const body = bodyOf(form, before, props.kernels);
 	const empty = target?.mode === "edit" && Object.keys(body).length === 0;
@@ -71,10 +71,11 @@ export function FpDialog(props: {
 							<FingerprintSection form={form} set={set} />
 						</TabsContent>
 						<TabsContent forceMount value="adv" className="data-[state=inactive]:hidden data-[state=active]:animate-in data-[state=active]:fade-in-0 duration-150">
-							<AdvancedSection form={form} set={set} />
+							<AdvancedSection form={form} set={set} before={before} />
 						</TabsContent>
 					</div>
 				</Tabs>
+				<LeakConfirm form={form} set={set} before={before} />
 				{issues.length ? <p className="t-aux text-destructive" role="alert">{issues.join("; ")}</p> : null}
 				<DialogFooter className="flex-row items-center sm:justify-between">
 					<Button variant="ghost" onClick={props.onClose}>取消</Button>

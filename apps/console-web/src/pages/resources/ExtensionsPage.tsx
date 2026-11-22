@@ -6,9 +6,10 @@ import { useEffect, useMemo, useState, type JSX } from "react";
 import { Link2, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge, Button, DataTable, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, type DataTableColumn } from "@hx/ui";
 import { extensionApi, type ExtensionBody, type ExtensionItem } from "../../lib/api-res";
+import { KEYS } from "../../lib/cache";
 import { usePoll } from "../../lib/hooks";
 import { EnvPicker, useHumanEnvs } from "./EnvPicker";
-import { IconBtn, ResToolbar, Row, confirmRemove, fmtTime, matchAny, splitList, submit } from "./ResParts";
+import { IconBtn, ResEmpty, ResToolbar, Row, confirmRemove, fmtTime, matchAny, splitList, submit } from "./ResParts";
 
 type Edit = { mode: "create" } | { mode: "edit"; item: ExtensionItem } | null;
 
@@ -112,7 +113,7 @@ export function ExtensionsPage(): JSX.Element {
 				<div className="flex justify-end gap-1">
 					<IconBtn label="绑定到环境" onClick={() => setBind(x)}><Link2 className="size-4" /></IconBtn>
 					<IconBtn label="编辑" onClick={() => setEdit({ mode: "edit", item: x })}><Pencil className="size-4" /></IconBtn>
-					<IconBtn label="删除" onClick={() => void confirmRemove("扩展", x.name, () => extensionApi.remove(x.id)).then((ok) => ok && res.reload())}><Trash2 className="size-4" /></IconBtn>
+					<IconBtn label="删除" onClick={() => void confirmRemove("扩展", x.name, () => extensionApi.remove(x.id), { key: KEYS.extensions, id: x.id }).then((ok) => ok && res.reload())}><Trash2 className="size-4" /></IconBtn>
 				</div>
 			),
 		},
@@ -120,11 +121,11 @@ export function ExtensionsPage(): JSX.Element {
 
 	if (res.result && !res.result.ok && !all.length) return <EmptyState text="未连接" hint={"GET /api/v1/extensions 失败: " + res.result.error} />;
 	return (
-		<div className="flex flex-col gap-3" data-res-page="extensions">
+		<div className="flex min-w-0 flex-col gap-3" data-res-page="extensions">
 			<ResToolbar query={q} onQuery={setQ} placeholder="搜索名称, 路径, 分类" count={rows.length}>
 				<Button size="sm" onClick={() => setEdit({ mode: "create" })}><Plus className="size-4" />新建扩展</Button>
 			</ResToolbar>
-			<DataTable columns={cols} rows={rows} rowKey={(x) => x.id} loading={res.loading && !res.result} emptyText={q ? "没有匹配的扩展" : "还没有扩展, 点新建扩展添加"} bare />
+			<DataTable columns={cols} rows={rows} rowKey={(x) => x.id} loading={res.loading && !res.result} empty={<ResEmpty kind="扩展" query={q} onClear={() => setQ("")} hint="添加一个解压后的扩展目录, 再绑定到环境" onCreate={() => setEdit({ mode: "create" })} />} bare />
 			<ExtDialog target={edit} busy={busy} onClose={() => setEdit(null)} onSubmit={(b) => void save(b)} />
 			<BindDialog item={bind} onClose={() => setBind(null)} onDone={() => (setBind(null), res.reload())} />
 		</div>

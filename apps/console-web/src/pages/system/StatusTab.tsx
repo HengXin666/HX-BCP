@@ -22,7 +22,7 @@ export function StatusTab(): JSX.Element {
 	const fp = verdict.result?.ok ? verdict.result.data : { verdict: "unknown" as const, checked: 0, at: "", evidence: [] };
 
 	return (
-		<div className="flex flex-col gap-6">
+		<div className="flex min-w-0 flex-col gap-6">
 			<Block title="链路" desc="浏览器服务 - 缓存代理 - 上游出口 - 目标站点, 颜色按下方图例">
 				<GlobalChain />
 			</Block>

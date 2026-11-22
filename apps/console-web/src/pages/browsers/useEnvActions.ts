@@ -2,6 +2,7 @@ import { createContext, useContext, useRef, useState, type Dispatch, type SetSta
 import { confirmDialog, toast } from "@hx/ui";
 import type { Env, Result } from "../../lib/api";
 import { batchOp, envApi, folderApi, type BatchOp, type BatchOutcome } from "../../lib/api-write";
+import { KEYS, optimistic } from "../../lib/cache";
 import { kernelPatch, type Kernel } from "../../lib/kernels";
 import type { BatchAction } from "./BatchBar";
 import { parseTags, type DialogState, type DialogValues } from "./EnvDialogs";
@@ -14,6 +15,24 @@ export const PendingContext = createContext<Record<string, RowPhase>>({});
 export const usePending = (id: string): RowPhase | undefined => useContext(PendingContext)[id];
 
 const FLASH_MS = 1200;
+
+/** 乐观更新时列表的预期结果: 写请求发出前先这样改缓存, 失败回滚 (见 lib/cache.optimistic). */
+type EnvsNext = (envs: Env[]) => Env[];
+
+function editIds(ids: string[], fields: Partial<Env>): EnvsNext {
+	const hit = new Set(ids);
+	return (envs) => envs.map((e) => (hit.has(e.id) ? { ...e, ...fields } : e));
+}
+
+function dropIds(ids: string[]): EnvsNext {
+	const hit = new Set(ids);
+	return (envs) => envs.filter((e) => !hit.has(e.id));
+}
+
+function addTags(ids: string[], tags: string[]): EnvsNext {
+	const hit = new Set(ids);
+	return (envs) => envs.map((e) => (hit.has(e.id) ? { ...e, tags: [...new Set([...(e.tags ?? []), ...tags])] } : e));
+}
 
 function report(label: string, r: BatchOutcome): void {
 	if (r.failed.length === 0) toast.success(label + " " + r.done + " 个完成");
@@ -33,7 +52,10 @@ function askDelete(names: string[]): Promise<boolean> {
 	});
 }
 
-/** 浏览器页的全部写操作. 逐行状态进 pending (启停删按钮读它显示转圈与成功态), 结束刷新列表. */
+/**
+ * 浏览器页的全部写操作. 逐行状态进 pending (启停删按钮读它显示转圈与成功态), 结束刷新列表.
+ * 改名, 移动, 改标签, 删除走乐观更新: 列表立刻变成预期结果, 失败回滚并提示; 启停以后端进程为准, 只转圈不预判.
+ */
 export function useEnvActions(ctx: {
 	byId: Map<string, Env>;
 	picked: Set<string>;
@@ -54,10 +76,10 @@ export function useEnvActions(ctx: {
 		if (phase !== "busy") timers.current[id] = setTimeout(() => setPending(({ [id]: _, ...rest }) => rest), FLASH_MS);
 	};
 
-	const run = async (label: string, call: () => Promise<Result<unknown>>, row?: { id: string; op: string }): Promise<boolean> => {
+	const run = async (label: string, call: () => Promise<Result<unknown>>, row?: { id: string; op: string }, next?: EnvsNext): Promise<boolean> => {
 		setBusy(true);
 		if (row) mark(row.id, row.op, "busy");
-		const r = await call();
+		const r = next ? await optimistic<Env[], unknown>(KEYS.envs, next, call) : await call();
 		setBusy(false);
 		if (row) mark(row.id, row.op, r.ok ? "done" : "fail");
 		if (r.ok) toast.success(label + "完成");
@@ -67,10 +89,11 @@ export function useEnvActions(ctx: {
 	};
 
 	/** 批量: 一次 POST /environments/batch, 每行先转圈, 回包后按 id 标成败; 汇总进 toast (成功数, 失败数, 第一条原因). */
-	const runMany = async (label: string, ids: string[], op: BatchOp, extra?: { folder?: string; tags?: string[] }): Promise<boolean> => {
+	const runMany = async (label: string, ids: string[], op: BatchOp, extra?: { folder?: string; tags?: string[] }, next?: EnvsNext): Promise<boolean> => {
 		setBusy(true);
 		for (const id of ids) mark(id, op, "busy");
-		const r = await batchOp(op, ids, extra);
+		const call = (): ReturnType<typeof batchOp> => batchOp(op, ids, extra);
+		const r = next ? await optimistic(KEYS.envs, next, call) : await call();
 		setBusy(false);
 		const out: BatchOutcome = r.ok ? r.data : { done: 0, failed: ids.map((id) => ({ id, error: r.error })) };
 		const bad = new Set(out.failed.map((f) => f.id));
@@ -90,7 +113,7 @@ export function useEnvActions(ctx: {
 		if (action === "move") setDialog({ kind: "move-env", env });
 		if (action === "tags") setDialog({ kind: "set-tags", env });
 		if (action === "kernel") setDialog({ kind: "set-kernel", env });
-		if (action === "delete" && (await askDelete([env.name]))) await run("删除", () => envApi.remove(env.id), row);
+		if (action === "delete" && (await askDelete([env.name]))) await run("删除", () => envApi.remove(env.id), row, dropIds([env.id]));
 	};
 
 	const onBatch = async (action: BatchAction): Promise<void> => {
@@ -110,15 +133,19 @@ export function useEnvActions(ctx: {
 		if (action === "stop") await runMany("批量停止", ids, "stop");
 		if (action === "move") setDialog({ kind: "move-many", ids });
 		if (action === "tags") setDialog({ kind: "add-tags", ids });
-		if (action === "delete" && (await askDelete(ids.map((id) => ctx.byId.get(id)?.name ?? id)))) await runMany("批量删除", ids, "delete");
+		if (action === "delete" && (await askDelete(ids.map((id) => ctx.byId.get(id)?.name ?? id)))) {
+			await runMany("批量删除", ids, "delete", undefined, dropIds(ids));
+		}
 	};
 
 	const onSubmit = async (state: NonNullable<DialogState>, v: DialogValues): Promise<void> => {
 		const tagsAdded = parseTags(v.tags);
 		let okAll = false;
-		if (state.kind === "move-many") okAll = await runMany("批量移动", state.ids, "move", { folder: v.folder });
-		else if (state.kind === "add-tags") okAll = await runMany("批量加标签", state.ids, "tags", { tags: tagsAdded });
-		else {
+		if (state.kind === "move-many") {
+			okAll = await runMany("批量移动", state.ids, "move", { folder: v.folder }, editIds(state.ids, { folder: v.folder }));
+		} else if (state.kind === "add-tags") {
+			okAll = await runMany("批量加标签", state.ids, "tags", { tags: tagsAdded }, addTags(state.ids, tagsAdded));
+		} else {
 			const calls: Record<string, () => Promise<Result<unknown>>> = {
 				"set-kernel": () => envApi.setKernel(state.kind === "set-kernel" ? state.env.id : "", kernelPatch(ctx.kernels.find((k) => k.id === v.kernel)) ?? { kernel: "", browser: "sun" }),
 				"new-folder": () => folderApi.create(v.name),
@@ -127,7 +154,12 @@ export function useEnvActions(ctx: {
 				"move-env": () => envApi.move(state.kind === "move-env" ? state.env.id : "", v.folder),
 				"set-tags": () => envApi.setTags(state.kind === "set-tags" ? state.env.id : "", tagsAdded),
 			};
-			okAll = await run("保存", calls[state.kind]);
+			const nexts: Record<string, EnvsNext | undefined> = {
+				"rename-env": state.kind === "rename-env" ? editIds([state.env.id], { name: v.name }) : undefined,
+				"move-env": state.kind === "move-env" ? editIds([state.env.id], { folder: v.folder }) : undefined,
+				"set-tags": state.kind === "set-tags" ? editIds([state.env.id], { tags: tagsAdded }) : undefined,
+			};
+			okAll = await run("保存", calls[state.kind], undefined, nexts[state.kind]);
 			if (okAll && state.kind === "rename-folder") ctx.pickNode("h/" + v.name);
 		}
 		if (okAll) setDialog(null);

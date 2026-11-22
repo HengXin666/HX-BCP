@@ -9,7 +9,17 @@ import {
 	DialogTitle,
 	InputField,
 } from "@hx/ui";
+import { parseHash } from "../lib/router";
 import { sessionApi } from "../lib/session";
+
+/** 地址栏里的一次性解锁码 (#/unlock?code=...); 读到就从历史里抹掉, 不留在浏览记录. */
+function takeUnlockCode(): string {
+	const r = parseHash(window.location.hash, []);
+	if (r.path[0] !== "unlock") return "";
+	window.history.replaceState(null, "", "#/overview");
+	window.dispatchEvent(new HashChangeEvent("hashchange"));
+	return r.query.get("code") ?? "";
+}
 
 type Phase = "checking" | "locked" | "open";
 
@@ -22,11 +32,19 @@ export function HumanGate({ children }: { children: ReactNode }): JSX.Element {
 
 	useEffect(() => {
 		let alive = true;
-		void sessionApi.state().then((r) => {
+		const code = takeUnlockCode();
+		void (async () => {
+			if (code) {
+				const u = await sessionApi.openCode(code);
+				if (!alive) return;
+				if (u.ok && u.data.human) return setPhase("open");
+				setError("解锁链接无效或已过期 (10 分钟), 运行 bcp-lane unlock-url 取新的, 或粘贴令牌");
+			}
+			const r = await sessionApi.state();
 			if (!alive) return;
 			if (!r.ok) setError(r.error);
 			setPhase(r.ok && r.data.human ? "open" : "locked");
-		});
+		})();
 		return () => {
 			alive = false;
 		};
@@ -50,7 +68,8 @@ export function HumanGate({ children }: { children: ReactNode }): JSX.Element {
 				<DialogHeader>
 					<DialogTitle>解锁人类通道</DialogTitle>
 					<DialogDescription>
-						粘贴本机人类令牌 (cat ~/.bcp/human.token). 8325 校验后发 12 小时的 HttpOnly 会话, 页面脚本读不到, 令牌不保存.
+						本机终端运行 bcp-lane unlock-url 打开它打印的链接 (10 分钟有效), 或粘贴本机人类令牌 (cat ~/.bcp/human.token).
+						8325 校验后发 12 小时的 HttpOnly 会话, 页面脚本读不到, 令牌不保存. Agent 的 API 密钥在这里无效.
 					</DialogDescription>
 				</DialogHeader>
 				<InputField

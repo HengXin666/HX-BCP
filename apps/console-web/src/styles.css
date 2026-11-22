@@ -91,7 +91,7 @@ body {
 
 /*
  * 浏览器表表头吸顶 (EnvTable 的 tableClassName). 普通 CSS, 不依赖 Tailwind 是否生成 sticky 类, 也不在 cascade layer 里,
- * 所以压过任何工具类. 滚动祖先是视口: 表格外层没有 overflow 非 visible 的盒子.
+ * 所以压过任何工具类. 滚动祖先是视口: 表格外层没有 overflow 非 visible 的盒子. 贴在吸顶顶栏下面 (top = --topbar-h).
  */
 /*
  * 表格不比容器宽: width/max-width 100%. 名称列用 w-full + max-w-0 吃剩余宽度并截断, 不再设 220px 下限
@@ -104,7 +104,7 @@ table.env-table {
 .env-table > thead,
 .env-table > thead > tr > th {
 	position: sticky;
-	top: 0;
+	top: var(--topbar-h);
 	z-index: 10;
 	background: var(--card);
 }
@@ -201,4 +201,183 @@ table.border-collapse > tbody > tr > td.tabular-nums {
 .text-\[13\.5px\],
 .text-\[14px\] {
 	font-size: 13px;
+}
+
+
+/* ============================================================================
+ * 控制台视觉层 (2026-11 重做). 只用 @hx/ui 的语义令牌, 不写色值, 深浅两套主题自动跟随.
+ * 原则: 卡片零阴影靠 1px 边框分层; 只有浮层 (批量条, 弹层) 带阴影; 动效 150 到 200ms ease-out, 尊重减少动效.
+ * 外壳尺寸: 顶栏高 --topbar-h, 侧栏 240 / 收起 56. 表头, 分组栏, 抽屉都按 --topbar-h 吸顶.
+ * ==========================================================================*/
+:root {
+	--topbar-h: 3.5rem;
+	--ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+html {
+	scrollbar-gutter: stable;
+}
+::selection {
+	background: color-mix(in oklab, var(--primary) 35%, transparent);
+}
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--border) transparent;
+}
+
+/* 外壳 */
+.app-sidebar {
+	background: color-mix(in oklab, var(--muted) 55%, var(--background));
+	transition: width 200ms var(--ease-out-soft);
+}
+.topbar {
+	background: color-mix(in oklab, var(--background) 82%, transparent);
+	backdrop-filter: saturate(1.4) blur(10px);
+	-webkit-backdrop-filter: saturate(1.4) blur(10px);
+}
+.brand-mark {
+	background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 70%, transparent), color-mix(in oklab, var(--done) 55%, transparent));
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent);
+}
+.nav-item {
+	position: relative;
+	color: var(--muted-foreground);
+	transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+.nav-item:hover {
+	color: var(--foreground);
+}
+.nav-item[data-active="true"] {
+	color: var(--heading);
+	background: var(--accent);
+}
+.nav-item[data-active="true"]::before {
+	content: "";
+	position: absolute;
+	left: -8px;
+	top: 6px;
+	bottom: 6px;
+	width: 3px;
+	border-radius: 0 3px 3px 0;
+	background: var(--link);
+}
+.search-trigger {
+	background: var(--muted);
+	transition: border-color 150ms ease-out, color 150ms ease-out;
+}
+.search-trigger:hover {
+	border-color: color-mix(in oklab, var(--link) 50%, var(--border));
+	color: var(--foreground);
+}
+.page-enter {
+	animation: page-enter 200ms var(--ease-out-soft);
+}
+@keyframes page-enter {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* 总览 */
+.kpi-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 16px;
+	min-width: 0;
+}
+.kpi-value {
+	font-size: 28px;
+	font-weight: 600;
+	line-height: 34px;
+	letter-spacing: -0.01em;
+}
+.kpi-arrow {
+	opacity: 0;
+	transform: translateX(-4px);
+	transition: opacity 150ms ease-out, transform 150ms ease-out;
+}
+.kpi-card:hover .kpi-arrow,
+.kpi-card:focus-visible .kpi-arrow {
+	opacity: 1;
+	transform: none;
+}
+.list-row {
+	border-bottom: 1px solid var(--border-muted);
+	transition: background-color 150ms ease-out;
+}
+.list-row:last-child {
+	border-bottom: 0;
+}
+.list-row:hover {
+	background: color-mix(in oklab, var(--accent) 60%, transparent);
+}
+.bar-row:not(:disabled):hover {
+	color: var(--heading);
+}
+
+/* 浏览器页工具条 */
+.status-chip {
+	color: var(--muted-foreground);
+	transition: background-color 150ms ease-out, color 150ms ease-out, box-shadow 150ms ease-out;
+}
+.status-chip:hover {
+	color: var(--foreground);
+}
+.status-chip[data-active="true"] {
+	color: var(--heading);
+	background: var(--card);
+	box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--border-muted);
+}
+.filter-chip {
+	background: color-mix(in oklab, var(--primary) 10%, transparent);
+	border-color: color-mix(in oklab, var(--link) 35%, var(--border));
+}
+
+/* 浮动批量条: 唯一允许的大阴影, 进场从下方滑入 */
+.batch-bar-inner {
+	box-shadow: 0 10px 30px -8px hsl(0 0% 0% / 0.45), 0 0 0 1px color-mix(in oklab, var(--foreground) 6%, transparent);
+	animation: batch-in 200ms var(--ease-out-soft);
+}
+@keyframes batch-in {
+	from {
+		opacity: 0;
+		transform: translateY(12px) scale(0.98);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* 表格密度: 舒适 44px, 紧凑 32px (默认 40px 由上面的 DataTable 统一规则给出) */
+[data-density="comfy"] table.border-collapse > tbody > tr > td {
+	height: 44px;
+}
+[data-density="compact"] table.border-collapse > tbody > tr > td {
+	height: 32px;
+}
+[data-density="compact"] table.border-collapse > thead > tr > th {
+	height: 32px;
+}
+.env-table > tbody > tr:hover > td {
+	background: color-mix(in oklab, var(--accent) 55%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.page-enter,
+	.batch-bar-inner {
+		animation: none;
+	}
+	.app-sidebar,
+	.nav-item,
+	.status-chip,
+	.list-row,
+	.kpi-arrow {
+		transition: none;
+	}
 }

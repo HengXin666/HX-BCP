@@ -7,10 +7,11 @@ import { LoaderCircle, Pencil, Plus, Radar, Trash2 } from "lucide-react";
 import { Badge, Button, Checkbox, DataTable, EmptyState, type DataTableColumn } from "@hx/ui";
 import { proxyApi, type ProxyBody, type ProxyItem } from "../../lib/api-res";
 import { checkExit, runBatch, type ExitCheck } from "../../lib/api-write";
+import { KEYS } from "../../lib/cache";
 import { usePoll } from "../../lib/hooks";
 import { proxyAddr } from "../../lib/proxy-parse";
 import { ProxyDialog, type ProxyTarget } from "./ProxyDialog";
-import { IconBtn, ResToolbar, confirmRemove, fmtTime, matchAny, submit } from "./ResParts";
+import { IconBtn, ResEmpty, ResToolbar, confirmRemove, fmtTime, matchAny, submit } from "./ResParts";
 
 type Checked = ExitCheck & { at: number };
 
@@ -75,7 +76,7 @@ export function ProxiesPage(): JSX.Element {
 		if (ok) (setTarget(null), res.reload());
 	};
 	const remove = async (p: ProxyItem): Promise<void> => {
-		if (await confirmRemove("代理", p.label || proxyAddr(p), () => proxyApi.remove(p.id))) (pick([p.id], false), res.reload());
+		if (await confirmRemove("代理", p.label || proxyAddr(p), () => proxyApi.remove(p.id), { key: KEYS.proxies, id: p.id })) (pick([p.id], false), res.reload());
 	};
 
 	const cols: DataTableColumn<ProxyItem>[] = [
@@ -116,7 +117,7 @@ export function ProxiesPage(): JSX.Element {
 
 	if (res.result && !res.result.ok && !all.length) return <EmptyState text="未连接" hint={"GET /api/v1/proxies 失败: " + res.result.error} />;
 	return (
-		<div className="flex flex-col gap-3" data-res-page="proxies">
+		<div className="flex min-w-0 flex-col gap-3" data-res-page="proxies">
 			<ResToolbar query={q} onQuery={setQ} placeholder="搜索名称, 主机, 端口, 国家" count={rows.length}>
 				<Button size="sm" variant="outline" disabled={picked.size === 0 || pending.size > 0} onClick={() => void checkPicked()}>
 					{pending.size ? <LoaderCircle className="size-4 animate-spin" /> : <Radar className="size-4" />}
@@ -124,7 +125,7 @@ export function ProxiesPage(): JSX.Element {
 				</Button>
 				<Button size="sm" onClick={() => setTarget({ mode: "create" })}><Plus className="size-4" />新建代理</Button>
 			</ResToolbar>
-			<DataTable columns={cols} rows={rows} rowKey={(p) => p.id} loading={res.loading && !res.result} empty={q ? <EmptyState text="没有匹配的代理" hint="换个关键字试试" action={<Button size="sm" variant="outline" onClick={() => setQ("")}>清除搜索</Button>} /> : <EmptyState text="代理库是空的" hint="新建一条代理, 再挂到环境上" action={<Button size="sm" onClick={() => setTarget({ mode: "create" })}><Plus className="size-4" />新建代理</Button>} />} bare />
+			<DataTable columns={cols} rows={rows} rowKey={(p) => p.id} loading={res.loading && !res.result} empty={<ResEmpty kind="代理" query={q} onClear={() => setQ("")} hint="新建一条代理, 再挂到环境上" onCreate={() => setTarget({ mode: "create" })} />} bare />
 			<ProxyDialog target={target} busy={busy} onClose={() => setTarget(null)} onSubmit={(b) => void save(b)} />
 		</div>
 	);
