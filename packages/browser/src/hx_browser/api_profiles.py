@@ -22,14 +22,12 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from . import (
-    display_iso,
     doctor,
     hxcp_link,
-    kernels,
+    leakproof,
     netcheck,
     profile_ops,
     repair_ops,
-    sandbox,
     window,
 )
 from .browser import get_runtime
@@ -72,16 +70,7 @@ def build_router(start_env, manager) -> APIRouter:
     """start_env/manager 由 api.create_app 注入 (复用既有启动路由的全部逻辑, 不复制一份). """
     r = APIRouter(prefix="/api/v1")
 
-    @r.get("/kernels")
-    async def list_kernels():
-        s = settings_manager.load()
-        return ok(
-            {
-                "kernels": kernels.list_kernels(s),
-                "sandbox": sandbox.status(),
-                "display": display_iso.status(),  # 窗口系统: X11 / Wayland / Xephyr
-            }
-        )
+    # GET /kernels moved to api_kernels.py (2026-11-22, kernel management page)
 
     @r.get("/profiles")
     async def list_profiles(search: str = "", tag: str = "", deleted: bool = False):
@@ -145,11 +134,13 @@ def build_router(start_env, manager) -> APIRouter:
     @r.put("/environments/{env_id}/prefs")
     async def put_prefs(env_id: str, payload: dict):
         env = _env_or_404(env_id)
+        before = leakproof.exposures(env)
+        fields = {k: v for k, v in payload.items() if k != leakproof.ACK_FIELD}
         try:
-            env.prefs = ProfilePrefs(**{**env.prefs.model_dump(), **payload})
+            env.prefs = ProfilePrefs(**{**env.prefs.model_dump(), **fields})
         except ValueError as e:
             return fail("设置格式无效: %s" % e)
-        errors = validate_prefs(env)
+        errors = validate_prefs(env) + leakproof.check(env, payload, before)
         if errors:
             return fail("; ".join(errors))
         get_store().update_env(env)
