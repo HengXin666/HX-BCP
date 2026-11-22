@@ -49,6 +49,11 @@ _PROFILE_FIELDS = {
         "type": "object",
         "description": "副本偏好, 字段见 GET /api/v1/environments/{id}/prefs",
     },
+    "leak_ack": {
+        "type": "array",
+        "items": _STR,
+        "description": "有意放开的泄漏面 webrtc_real / host_loopback; 不填 = 默认防泄漏, 放开却不填会被拒绝",
+    },
 }
 
 # name -> (描述, 额外参数 schema, 必填参数, HTTP 方法, 路径模板)

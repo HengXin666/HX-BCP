@@ -1,4 +1,4 @@
-"""检测: 网络 / 语言 / 时区 / 系统时钟 / WebRTC / DNS / DNT-GPC / 字体 / 定位 / 内核 / 隔离。
+"""检测: 网络 / 语言 / 时区 / 系统时钟 / WebRTC / DNS / DNS 泄漏 / 出口握手 / DNT-GPC / 字体 / 定位 / 内核 / 隔离。
 
 Agent Note: .agents/notes/implemented/feature/2026-10-16-hxbrowser-profile-ops-nodecloak.md
 
@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from . import kernels, netcheck, sandbox
+from . import dnsleak, kernels, launch_hooks, leakproof, netcheck, sandbox, tlsprobe
 from .firefox_prefs import chinese_fonts
 from .prefs import MODE_IP, ON
 from .profile_rules import effective_languages, effective_timezone, is_firefox
@@ -129,12 +129,12 @@ def _timezone(env, region: dict) -> dict:
 
 
 def _webrtc(env) -> dict:
-    p, fp = env.prefs, env.fingerprint
-    if p.webrtc in ("proxy", "disable") or fp.webrtc_mode in ("proxy", "disable"):
+    p = env.prefs
+    if leakproof.webrtc_guarded(env):
         return check(
             "webrtc",
             CONFIGURED,
-            "已限制非代理 UDP" if p.webrtc != "disable" else "已关闭 WebRTC",
+            "已关闭 WebRTC" if leakproof.effective_webrtc(env) == "disable" else "已限制非代理 UDP",
         )
     if env.proxy.type in CUSTOM_TYPES:
         return check(
@@ -224,6 +224,10 @@ def _kernel(env, settings) -> dict:
             "内核 %s 不可用, 请在设置中配置路径"
             % (env.fingerprint.kernel or kernels.family_of(env)),
         )
+    conflicts = launch_hooks.ua_kernel_conflicts(env, settings)
+    if conflicts:
+        detail = "; ".join(conflicts) + ". 握手不改, 出口握手永远是内核本身, 清空 User-Agent 即按内核真实版本生成"
+        return check("kernel", ERROR, "User-Agent 与内核矛盾, 启动会被拒绝", detail)
     return check("kernel", HEALTHY, "%s · %s" % (env.fingerprint.kernel or "默认", exe))
 
 
@@ -244,11 +248,14 @@ def _isolation(env) -> dict:
             "PID/IPC/UTS/网络/家目录/显示/字体隔离 + seccomp; 内核共享"
             + ("; X 显示为共享模式" if env.prefs.sandbox_x11 == "shared" else ""),
         )
+    why = leakproof.sandbox_blocker(env)
+    acked = leakproof.HOST_LOOPBACK in (env.leak_ack or [])
     return check(
         "isolation",
-        HEALTHY,
-        "独立 profile + 独立进程",
-        "如需命名空间隔离可切换 sandbox",
+        WARNING,
+        "独立 profile + 独立进程" + (" (已确认放开)" if acked else ""),
+        leakproof.TEXT[leakproof.HOST_LOOPBACK] + ("; 本机无法改用沙箱: " + why if why else ""),
+        None if why else {"isolation": "sandbox"},
     )
 
 
@@ -271,6 +278,8 @@ async def run(
         await netcheck.clock_check(env) if with_network else netcheck.clock_unknown(),
         _webrtc(env),
         _dns(env),
+        *dnsleak.doctor_checks(env),
+        *(await tlsprobe.doctor_checks(env)),
         _tracking(env),
         _fonts(env, fonts),
         _geolocation(env),

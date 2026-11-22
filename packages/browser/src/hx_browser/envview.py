@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import lane
 
-from . import kernels, lane_guard, launch_hooks, locale
+from . import kernels, lane_guard, launch_hooks, leakproof, locale
 from .browser import get_runtime
 from .models import Environment
 
@@ -65,6 +65,7 @@ def env_dict(env: Environment) -> dict:
     d["in_use"] = env.lane == lane.AGENT and rt is not None
     d["in_use_since"] = rt.started_at if rt and env.lane == lane.AGENT else 0
     d["readonly"] = not lane_guard.writable(env)
+    d["leak"] = leakproof.status(env)  # exposures, acked, unavoidable, guarded
     return d
 
 

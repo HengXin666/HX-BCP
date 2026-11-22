@@ -18,6 +18,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+from . import leakproof
 from .browser import get_runtime
 from .chromium_prefs import LOCAL_STATE, PREFS_REL
 from .firefox_prefs import USER_JS
@@ -103,6 +104,7 @@ def restore(store, record_id: str) -> dict:
     if get_runtime(env.id):
         raise OpError("请先关闭该副本再恢复 (运行中的浏览器退出时会覆盖恢复结果)")
     current = env.prefs.model_dump()
+    exposed_before = leakproof.exposures(env)
     restored, conflicts = [], []
     for ch in rec.get("changes", []):
         if ch.get("scope") != SCOPE_PREFS:
@@ -114,6 +116,8 @@ def restore(store, record_id: str) -> dict:
         current[key] = ch.get("before")
         restored.append(key)
     env.prefs = ProfilePrefs(**current)
+    if errors := leakproof.check(env, None, exposed_before):
+        raise OpError("恢复会重新打开泄漏面, 未做任何修改: " + "; ".join(errors))
     store.update_env(env)
     src = backups_root(store) / env.id / record_id
     files = []

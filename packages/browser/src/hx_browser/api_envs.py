@@ -11,7 +11,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from . import folders, lane_guard, profile_ops
+from . import folders, lane_guard, leakproof, profile_ops
 from .envview import env_dict
 from .models import Environment
 from .store import get_store
@@ -65,6 +65,7 @@ class EnvCreate(BaseModel):
     storage: dict | None = None
     prefs: dict | None = None
     notes: str = ""
+    leak_ack: list[str] = []
 
 
 @router.post("/environments")
@@ -97,8 +98,12 @@ async def create_env(payload: EnvCreate):
         env.storage = type(env.storage)(**{**env.storage.model_dump(), **payload.storage})
     if payload.prefs:
         env.prefs = type(env.prefs)(**{**env.prefs.model_dump(), **payload.prefs})
-    if errors := profile_ops.apply_extras(env, payload.model_dump()):
+    body = payload.model_dump()
+    if errors := profile_ops.apply_extras(env, body):
         return fail(", ".join(errors))
+    leakproof.apply_defaults(env, body)
+    if errors := leakproof.check(env, body):
+        return fail("; ".join(errors))
     try:
         s.add_env(env)
     except folders.FolderError as e:

@@ -128,6 +128,7 @@ def test_real_browser_through_relay(tmp_path, isolation):
             "proxy": {"link": "http://%s:%s@127.0.0.1:%d" % (USER, PASSWORD, up.proxy_port)},
             "prefs": {"language_mode": "custom", "languages": ["ja-JP", "ja"], "webrtc": "proxy",
                       "startup_url": "http://hx-e2e.test/", "isolation": isolation},
+            "leak_ack": ["host_loopback"],  # process is chosen on purpose here
         }  # fmt: skip
         env_id = c.post("/api/v1/environments", json=body).json()["data"]["id"]
         started = c.post("/api/v1/environments/%s/start" % env_id).json()

@@ -18,7 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import cdp
+from . import cdp, leakproof
 from .fingerprint import WEBGL_BY_OS, _CONTENT_JS, _noise_js, parse_resolution, platform_for, ua_for
 from .models import Environment
 
@@ -258,7 +258,7 @@ def _fp_json_for(
         "webgl_renderer": renderer,
         "noise_seed": seed_for(env.id, profile_dir) if profile_dir else 0,
         "webrtc_public_ip": fp.webrtc_public_ip or "",
-        "hide_webrtc": fp.webrtc_mode == "proxy",
+        "hide_webrtc": leakproof.blink_hook(env),
         "fake_media_devices": bool(inner.get("fake_media_devices", False)),
         "do_not_track": inner.get("do_not_track"),
         "notification_permission": inner.get("notification_permission", ""),

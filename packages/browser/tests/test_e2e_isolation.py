@@ -84,6 +84,7 @@ def _browser_pid(root: int) -> int:
 
 
 def _start(c, body: dict) -> tuple[str, dict]:
+    body = {"leak_ack": ["host_loopback"], **body}  # the process control group is chosen on purpose
     env_id = c.post("/api/v1/environments", json=body).json()["data"]["id"]
     started = c.post("/api/v1/environments/%s/start" % env_id).json()
     assert started["code"] == 0, started

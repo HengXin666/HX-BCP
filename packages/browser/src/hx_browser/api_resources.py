@@ -8,7 +8,8 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from .api_common import ok, store
+from . import leakproof
+from .api_common import fail, ok, store
 from .models import Environment, Extension, Fingerprint, Proxy, Template, now_ms
 from .proxy import check_proxy
 
@@ -126,10 +127,12 @@ async def delete_template(tpl_id: str):
 
 
 @router.post("/templates/{tpl_id}/apply")
-async def apply_template(tpl_id: str, count: int = 1):
+async def apply_template(tpl_id: str, count: int = 1, leak_ack: str = ""):
+    """Create browsers from a template, fields the template leaves out get the leak guards, explicit gaps need leak_ack."""
     t = next((x for x in store().load_templates() if x.id == tpl_id), None)
     if not t:
         raise HTTPException(404, "模板不存在")
+    body = {"fingerprint": t.fingerprint, "leak_ack": leak_ack}
     created = []
     for i in range(max(0, min(count, 50))):
         env = Environment(
@@ -138,6 +141,9 @@ async def apply_template(tpl_id: str, count: int = 1):
             launch=type(Environment().launch)(**{**Environment().launch.model_dump(), **t.launch}),
         )
         env.id = "env_" + __import__("secrets").token_hex(5)
+        leakproof.apply_defaults(env, body)
+        if errors := leakproof.check(env, body):
+            return fail("; ".join(errors))
         store().add_env(env)
         created.append(env)
     return ok({"count": len(created)})

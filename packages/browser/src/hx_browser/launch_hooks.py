@@ -28,10 +28,13 @@ from . import (
     display_iso,
     firefox_prefs,
     fontiso,
+    guard,
     kernels,
+    leakproof,
     netcheck,
     relay,
     sandbox,
+    tlsprobe,
 )
 from .profile_rules import effective_languages, effective_timezone, validate_prefs
 from .proxy_link import (
@@ -43,6 +46,8 @@ from .proxy_link import (
 
 PREP_KEY = "prep"
 WEBRTC_STRICT_FLAG = "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"
+# 不读宿主的外部扩展清单 (/usr/share/chromium/extensions 等), 见 2026-11-15 note
+NO_HOST_EXTENSIONS_FLAG = "--disable-default-apps"
 
 
 @dataclass
@@ -89,10 +94,26 @@ def is_sandbox(env) -> bool:
     return env.prefs.isolation == "sandbox"
 
 
-async def prepare(env, profile_dir: Path, plan=None, cdp_port: int = 0) -> LaunchPrep:
+def ua_kernel_conflicts(env, settings) -> list[str]:
+    """手写 UA 与本副本内核族或真实主版本的矛盾项, 没手写 UA 或找不到内核时返回空列表.
+
+    Agent Note: .agents/notes/implemented/feature/2026-11-15-hxbrowser-ua-kernel-coherence.md
+    """
+    ua = env.fingerprint.user_agent or ""
+    if not ua or settings is None:
+        return []
+    exe = kernels.resolve_executable(env, settings)
+    major = guard.kernel_major(exe) if exe and Path(exe).exists() else ""
+    return tlsprobe.ua_conflicts(ua, kernels.family_of(env), int(major or 0))
+
+
+async def prepare(env, profile_dir: Path, plan=None, cdp_port: int = 0, settings=None) -> LaunchPrep:
     errors = validate_prefs(env)
     if errors:
         raise ValueError("；".join(errors))
+    conflicts = ua_kernel_conflicts(env, settings)
+    if conflicts:
+        raise ValueError("User-Agent 与内核真实握手矛盾, 已拒绝启动: " + "; ".join(conflicts) + ". 清空 User-Agent 即按内核真实版本生成")
     if env.prefs.isolation == "sandbox" and not sandbox.available():
         raise sandbox.SandboxUnavailable(
             "副本要求 sandbox 隔离, 但本机未安装 bubblewrap (bwrap); 已拒绝启动, 未降级"
@@ -160,10 +181,11 @@ def prep_of(env) -> LaunchPrep | None:
 
 
 def chromium_args(env) -> list[str]:
-    """代理 + WebRTC 启动参数 (替代旧 proxy_args: 凭据不再进命令行)。"""
+    """代理 + WebRTC + 禁宿主外部扩展的启动参数 (凭据不进命令行)。"""
     prep = prep_of(env)
     proxy = _SandboxEgress() if is_sandbox(env) else env.proxy
     out = chromium_proxy_args(proxy, prep.relay_port if prep else 0)
+    out.append(NO_HOST_EXTENSIONS_FLAG)
     if env.prefs.webrtc in ("proxy", "disable") and env.fingerprint.webrtc_mode not in (
         "proxy",
         "disable",
@@ -197,7 +219,8 @@ def write_firefox(env, profile_dir: Path) -> Path:
         )
     proxy = _SandboxEgress() if is_sandbox(env) else env.proxy
     proxy_prefs = firefox_proxy_prefs(proxy, prep.relay_port if prep else 0)
-    values = firefox_prefs.plan(env.prefs, _managed_languages(env, prep), proxy_prefs)
+    prefs = env.prefs.model_copy(update={"webrtc": leakproof.effective_webrtc(env)})
+    values = firefox_prefs.plan(prefs, _managed_languages(env, prep), proxy_prefs)
     return firefox_prefs.write(profile_dir, values)
 
 

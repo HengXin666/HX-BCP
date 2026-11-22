@@ -122,6 +122,11 @@ navigator/screen/WebGL/时区等, 但**看不到** TLS 指纹、HTTP/2 帧序、
 等非 JS 维度。所以"守卫通过" ≠ "指纹完全隔离", 只等于**"JS 可见维度上确实换了"**。
 要覆盖非 JS 维度需另用抓包/端侧方案。
 
+**2026-11-15 补充**: hx_browser 已在 relay 处加出口侧只读握手探针 (`hx_browser/tlsprobe.py`,
+体检项 `tls_handshake`), 记录真实 ClientHello 的 ja4_r / ja3n 并与宣称 UA 主版本、真实内核版本比对。
+H2 SETTINGS 在 TLS 隧道内加密, 不终结 TLS 就看不到, 仍未覆盖。见
+`.agents/notes/implemented/feature/2026-11-15-hxbrowser-egress-tls-probe.md`。
+
 ## 目录
 
 ```
