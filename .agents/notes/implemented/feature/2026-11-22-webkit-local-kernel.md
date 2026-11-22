@@ -26,3 +26,9 @@
 ## 验证
 - 沙箱装了 webkit-2388 构建, runner 能起能停, start_runtime 端到端通过.
 - tests/test_webkit_local.py 5 条.
+
+## 与 main 的 safari 内核并存 (2026-11-22)
+
+- main 的 #18 已有 `safari` 内核 (WebKitGTK MiniBrowser, 见 webkit.py), 由我们起进程, 走 _spawn 的沙箱与代理 relay.
+- WebKit 族现有三个入口: `safari` (MiniBrowser), `webkit` (Playwright 构建, 本机 runner), `safarier` (仅 macOS, CLI 驱动). 后两者经 external.py 分派, browser.start 按内核 id (external.handles) 而不是按族判断.
+- kernels.py 里 safarier 专属分支按 id 判断, safari 走普通 binary 探测; FEATURES 由各内核行覆盖.
