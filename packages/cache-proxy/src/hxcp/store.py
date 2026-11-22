@@ -85,8 +85,14 @@ class Store:
         self.max_entries_bytes = max_entries_bytes
         self._lock = threading.RLock()
         self._db_path = self.root / "index.sqlite3"
-        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
+        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=15)
         self._conn.row_factory = sqlite3.Row
+        # Several engines and proxies share one store: WAL lets readers run beside a writer.
+        try:
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA busy_timeout=15000")
+        except sqlite3.DatabaseError:
+            pass
         self._rebuilt = False
         self._ensure_schema()
 
@@ -212,6 +218,63 @@ class Store:
             self._conn.execute("UPDATE entries SET hit_count=hit_count+1 WHERE key=?", (key,))
             self._conn.execute("INSERT INTO hits(key,at) VALUES(?,?)", (key, now))
             self._conn.commit()
+
+    def query(self, q: str = "", limit: int = 100, order: str = "hits") -> list[dict[str, Any]]:
+        """Entries for listing, filtered by URL substring."""
+        sql = ("SELECT key,url,method,status,size,hit_count,source,stored_at,fresh_until,etag,"
+               "headers FROM entries")
+        args: list[Any] = []
+        if q:
+            sql += " WHERE url LIKE ?"
+            args.append("%" + q + "%")
+        sql += {"recent": " ORDER BY stored_at DESC", "size": " ORDER BY size DESC"}.get(
+            order, " ORDER BY hit_count DESC, size DESC")
+        sql += " LIMIT ?"
+        args.append(max(1, min(int(limit), 5000)))
+        with self._lock:
+            rows = self._conn.execute(sql, args).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            hdrs = json.loads(d.pop("headers") or "[]")
+            d["type"] = next((str(h[1]).split(";")[0].strip() for h in hdrs
+                              if str(h[0]).lower() == "content-type"), "")
+            d["host"] = urlparse(d["url"]).hostname or ""
+            out.append(d)
+        return out
+
+    def host_summary(self, limit: int = 200) -> list[dict[str, Any]]:
+        """Per host entry counts and bytes, the shape the console shows."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT url,size,hit_count FROM entries").fetchall()
+        agg: dict[str, dict[str, Any]] = {}
+        for r in rows:
+            h = urlparse(r["url"]).hostname or "?"
+            a = agg.setdefault(h, {"host": h, "entries": 0, "bytes": 0, "hits": 0, "saved": 0})
+            a["entries"] += 1
+            a["bytes"] += int(r["size"])
+            a["hits"] += int(r["hit_count"])
+            a["saved"] += int(r["size"]) * int(r["hit_count"])
+        return sorted(agg.values(), key=lambda a: -a["saved"])[:limit]
+
+    def delete(self, url: str) -> bool:
+        """Drop one entry (blob stays if another key still points to it)."""
+        key = cache_key("GET", url)
+        with self._lock:
+            row = self._conn.execute("SELECT body_hash FROM entries WHERE key=?", (key,)).fetchone()
+            if row is None:
+                return False
+            self._conn.execute("DELETE FROM entries WHERE key=?", (key,))
+            still = self._conn.execute("SELECT 1 FROM entries WHERE body_hash=? LIMIT 1",
+                                       (row["body_hash"],)).fetchone()
+            if not still:
+                try:
+                    self._blob_path(row["body_hash"]).unlink()
+                except OSError:
+                    pass
+            self._conn.commit()
+        return True
 
     def purge_expired(self, now: float | None = None) -> int:
         now = time.time() if now is None else now

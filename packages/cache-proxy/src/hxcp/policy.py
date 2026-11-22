@@ -99,6 +99,9 @@ def decide(url: str, status: int, headers: dict[str, str], *, size: int,
     cc = _parse_cache_control(headers)
     if "no-store" in cc or "private" in cc:
         return Decision(False, reason="cache_control_no_store")
+    vary = shared_unsafe_vary(headers)
+    if vary:
+        return Decision(False, reason="vary:" + vary)
     etag = ""
     for k, v in (headers or {}).items():
         if k.lower() in ("etag", "last-modified"):
@@ -131,6 +134,36 @@ def decide(url: str, status: int, headers: dict[str, str], *, size: int,
         return Decision(False, reason="conditional_no_header")
 
     return Decision(False, reason="unknown_type:" + (ctype or "?"))
+
+
+# Vary on these means the body depends on who asks, so one copy can not serve every env.
+UNSAFE_VARY = frozenset({"*", "cookie", "authorization", "user-agent", "sec-ch-ua",
+                         "sec-ch-ua-platform", "sec-ch-ua-mobile", "x-forwarded-for"})
+
+
+def shared_unsafe_vary(headers: dict[str, str]) -> str:
+    """Name of the first Vary field that makes a shared cache entry wrong, else empty."""
+    for k, v in (headers or {}).items():
+        if k.lower() != "vary":
+            continue
+        for part in str(v).split(","):
+            name = part.strip().lower()
+            if name in UNSAFE_VARY:
+                return name
+    return ""
+
+
+def request_cacheable(method: str, headers: dict[str, str] | None) -> str:
+    """Empty string when a request may be answered from or fill the shared cache, else the reason."""
+    if str(method or "GET").upper() != "GET":
+        return "method"
+    for k in (headers or {}):
+        lk = str(k).lower()
+        if lk == "range":
+            return "range"
+        if lk == "authorization":
+            return "authorization"
+    return ""
 
 
 @dataclass

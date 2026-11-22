@@ -1,0 +1,332 @@
+@import "tailwindcss";
+@import "@hx/ui/tokens.css";
+@import "@hx/ui/styles.css";
+@source "../node_modules/@hx/ui/dist";
+
+/*
+ * 字号刻度 (全站只有这六档, 代码里写 t-page / t-section / t-card / t-body / t-aux / t-micro, 不写 text-[..px]):
+ *   页面标题 20/600/28, 区块标题 15/600/22, 卡片标题 13/500/18, 正文 13/400/20, 辅助 12/400/16, 微标 11/500/14 大写加宽.
+ * 颜色另写 (辅助与微标通常配 text-muted-foreground). @hx/ui 内部用到的半像素档 (10.5, 11.5, 12.5) 在 :root 里并到相邻整档,
+ * 9 与 10 并到 11, 这样库组件 (表格, 徽标, 按钮) 也落在同一套刻度上.
+ * 间距只用 4 的倍数: 行内元素 gap-2 (8), 卡片内边距 p-4 (16), 卡片间距 gap-3 (12), 区块间距 gap-6 (24).
+ */
+@theme {
+	/* 库组件里的 Tailwind 档位也并进六档: xs=辅助 12/16, sm 与 base=正文 13/20, lg=区块 15/22, xl 与 2xl=页面 20/28. */
+	--text-xs: 12px;
+	--text-xs--line-height: 16px;
+	--text-sm: 13px;
+	--text-sm--line-height: 20px;
+	--text-base: 13px;
+	--text-base--line-height: 20px;
+	--text-lg: 15px;
+	--text-lg--line-height: 22px;
+	--text-xl: 20px;
+	--text-xl--line-height: 28px;
+	--text-2xl: 20px;
+	--text-2xl--line-height: 28px;
+}
+:root {
+	--fs-3xs: 11px;
+	--fs-2xs: 11px;
+	--fs-2xs-half: 11px;
+	--fs-xs-half: 12px;
+	--fs-sm-half: 13px;
+	--fs-base: 13px;
+	--fs-lg: 15px;
+	--fs-xl: 20px;
+	--fs-2xl: 20px;
+}
+/* 库组件里的半档间距并到 4 的倍数: px-2.5 (10) -> 8, gap-0.5 (2) -> 4, gap-1.5 (6) -> 8, gap-2.5 (10) -> 12. 不进 layer. */
+.px-2\.5 {
+	padding-inline: 8px;
+}
+.gap-0\.5 {
+	gap: 4px;
+}
+.gap-1\.5 {
+	gap: 8px;
+}
+.gap-2\.5 {
+	gap: 12px;
+}
+@utility t-page {
+	font-size: 20px;
+	font-weight: 600;
+	line-height: 28px;
+}
+@utility t-section {
+	font-size: 15px;
+	font-weight: 600;
+	line-height: 22px;
+}
+@utility t-card {
+	font-size: 13px;
+	font-weight: 500;
+	line-height: 18px;
+}
+@utility t-body {
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 20px;
+}
+@utility t-aux {
+	font-size: 12px;
+	line-height: 16px;
+}
+@utility t-micro {
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 14px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+body {
+	margin: 0;
+	font-size: 13px;
+	line-height: 20px;
+	background: var(--background);
+	color: var(--foreground);
+}
+
+/*
+ * 焦点态: 键盘聚焦 (focus-visible) 的可交互元素一律 2px ring 色描边, 外移 2px. 鼠标点击不出现.
+ * 输入框, 下拉与多行文本由 @hx/ui 自带 ring, 不在这里叠加. 表格行可聚焦 (DataTable 给 tabIndex=0), Enter 打开详情.
+ */
+:where(button, a[href], summary, [role="tab"], [role="option"], [role="menuitem"], [role="checkbox"], [role="switch"], [tabindex]:not([tabindex="-1"]):not(input):not(textarea):not(select)):focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+}
+/* 输入框: 库只把边框换成 ring 色 (对比弱), 这里补同一道 2px 描边, 贴边不外移. */
+:where(input:not([type="checkbox"]):not([type="radio"]), textarea, select):focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 0;
+}
+
+
+/*
+ * 所有 DataTable (浏览器表, 代理, 扩展, 模板, 孤儿进程): 行高 40px, 单元格上下不留内边距, 左右 8px;
+ * 表头 11px 大写加宽 muted. 库默认是 py-1.5 / py-2 (6px / 8px, 行高随内容浮动), 这里统一掉.
+ */
+table.border-collapse > tbody > tr > td,
+table.border-collapse > thead > tr > th {
+	height: 40px;
+	padding-top: 0;
+	padding-bottom: 0;
+	padding-left: 8px;
+	padding-right: 8px;
+}
+table.border-collapse > thead > tr > th {
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 14px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--muted-foreground);
+}
+table.border-collapse > tbody > tr > td {
+	font-size: 13px;
+	line-height: 20px;
+}
+/* 数字列 (DataTable numeric: 次数, 条数, PID) 右对齐由库给出, 这里补等宽字体, 上下行的位数对齐. */
+table.border-collapse > tbody > tr > td.tabular-nums {
+	font-family: var(--font-mono);
+}
+/*
+ * @hx/ui 组件内部写死的任意字号 (text-[9px] ... text-[14px]) 也并进六档, 不改库源码:
+ * 9/10/10.5 -> 11, 11.5 -> 12, 12.5/13.5/14 -> 13. 不进 layer, 优先级高于库的 utilities.
+ */
+.text-\[9px\],
+.text-\[10px\],
+.text-\[10\.5px\] {
+	font-size: 11px;
+}
+.text-\[11\.5px\] {
+	font-size: 12px;
+}
+.text-\[12\.5px\],
+.text-\[13\.5px\],
+.text-\[14px\] {
+	font-size: 13px;
+}
+
+
+/* ============================================================================
+ * 控制台视觉层 (2026-11 重做). 只用 @hx/ui 的语义令牌, 不写色值, 深浅两套主题自动跟随.
+ * 原则: 卡片零阴影靠 1px 边框分层; 只有浮层 (批量条, 弹层) 带阴影; 动效 150 到 200ms ease-out, 尊重减少动效.
+ * 外壳尺寸: 顶栏高 --topbar-h, 侧栏 240 / 收起 56. 表头, 分组栏, 抽屉都按 --topbar-h 吸顶.
+ * ==========================================================================*/
+:root {
+	--topbar-h: 3.5rem;
+	--ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+html {
+	scrollbar-gutter: stable;
+}
+::selection {
+	background: color-mix(in oklab, var(--primary) 35%, transparent);
+}
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--border) transparent;
+}
+
+/* 外壳 */
+.app-sidebar {
+	background: color-mix(in oklab, var(--muted) 55%, var(--background));
+	transition: width 200ms var(--ease-out-soft);
+}
+.topbar {
+	background: color-mix(in oklab, var(--background) 82%, transparent);
+	backdrop-filter: saturate(1.4) blur(10px);
+	-webkit-backdrop-filter: saturate(1.4) blur(10px);
+}
+.brand-mark {
+	background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 70%, transparent), color-mix(in oklab, var(--done) 55%, transparent));
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent);
+}
+.nav-item {
+	position: relative;
+	color: var(--muted-foreground);
+	transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+.nav-item:hover {
+	color: var(--foreground);
+}
+.nav-item[data-active="true"] {
+	color: var(--heading);
+	background: var(--accent);
+}
+.nav-item[data-active="true"]::before {
+	content: "";
+	position: absolute;
+	left: -8px;
+	top: 6px;
+	bottom: 6px;
+	width: 3px;
+	border-radius: 0 3px 3px 0;
+	background: var(--link);
+}
+.search-trigger {
+	background: var(--muted);
+	transition: border-color 150ms ease-out, color 150ms ease-out;
+}
+.search-trigger:hover {
+	border-color: color-mix(in oklab, var(--link) 50%, var(--border));
+	color: var(--foreground);
+}
+.page-enter {
+	animation: page-enter 200ms var(--ease-out-soft);
+}
+@keyframes page-enter {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* 总览 */
+.kpi-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 16px;
+	min-width: 0;
+}
+.kpi-value {
+	font-size: 28px;
+	font-weight: 600;
+	line-height: 34px;
+	letter-spacing: -0.01em;
+}
+.kpi-arrow {
+	opacity: 0;
+	transform: translateX(-4px);
+	transition: opacity 150ms ease-out, transform 150ms ease-out;
+}
+.kpi-card:hover .kpi-arrow,
+.kpi-card:focus-visible .kpi-arrow {
+	opacity: 1;
+	transform: none;
+}
+.list-row {
+	border-bottom: 1px solid var(--border-muted);
+	transition: background-color 150ms ease-out;
+}
+.list-row:last-child {
+	border-bottom: 0;
+}
+.list-row:hover {
+	background: color-mix(in oklab, var(--accent) 60%, transparent);
+}
+.bar-row:not(:disabled):hover {
+	color: var(--heading);
+}
+
+/* 浏览器页工具条 */
+.status-chip {
+	color: var(--muted-foreground);
+	transition: background-color 150ms ease-out, color 150ms ease-out, box-shadow 150ms ease-out;
+}
+.status-chip:hover {
+	color: var(--foreground);
+}
+.status-chip[data-active="true"] {
+	color: var(--heading);
+	background: var(--card);
+	box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--border-muted);
+}
+.filter-chip {
+	background: color-mix(in oklab, var(--primary) 10%, transparent);
+	border-color: color-mix(in oklab, var(--link) 35%, var(--border));
+}
+
+/* 表格密度: 舒适 44px, 紧凑 32px (默认 40px 由上面的 DataTable 统一规则给出) */
+[data-density="comfy"] table.border-collapse > tbody > tr > td {
+	height: 44px;
+}
+[data-density="compact"] table.border-collapse > tbody > tr > td {
+	height: 32px;
+}
+[data-density="compact"] table.border-collapse > thead > tr > th {
+	height: 32px;
+}
+/* hxcp: 抓包表单行不换行, 选中的行, 时序密度条 */
+.flow-table > tbody > tr > td {
+	white-space: nowrap;
+}
+tr:has([data-selected="true"]) > td {
+	background: color-mix(in oklab, var(--primary) 14%, transparent);
+}
+.spark {
+	display: flex;
+	align-items: flex-end;
+	gap: 1px;
+	height: 40px;
+}
+.spark > i {
+	flex: 1;
+	min-width: 1px;
+	border-radius: 1px;
+	background: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+}
+.spark > i[data-err="true"] {
+	background: var(--destructive);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.page-enter {
+		animation: none;
+	}
+	.app-sidebar,
+	.nav-item,
+	.status-chip,
+	.list-row,
+	.kpi-arrow {
+		transition: none;
+	}
+}

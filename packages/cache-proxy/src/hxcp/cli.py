@@ -14,6 +14,7 @@ import time
 
 from .attach import open_fleet
 from .launcher import launch, port_open
+from .proxy import add_parser as add_proxy_parser
 from . import policy
 from .store import Store
 
@@ -58,6 +59,7 @@ def cmd_run(a) -> int:
             forensic=bool(a.forensic),
             forensic_max_bytes=int(a.forensic_max_bytes or 0),
             forensic_free_bytes=int(a.forensic_free_mb or 0) * 1024 * 1024,
+            client=str(a.client or "cdp"),
             on_flow=(lambda f: print("[flow] " + json.dumps(f, ensure_ascii=False))
                      if a.verbose else None),
         )
@@ -115,7 +117,8 @@ def cmd_cache(a) -> int:
         from . import flows as flows_mod
         rows = list(flows_mod.iter_flows(
             store.root / "flows", host=a.host, status=(a.status or None),
-            q=a.q, kind=a.kind, limit=int(a.limit), days=(a.days or None)))
+            q=a.q, kind=a.kind, limit=int(a.limit), days=(a.days or None),
+            client=a.client))
         print(json.dumps(rows, ensure_ascii=False, indent=2))
         print("共 " + str(len(rows)) + " 条 (root=" + str(store.root / "flows") + ")")
     elif a.action == "flow-stats":
@@ -189,6 +192,8 @@ def import_seed(store: Store, seed_dir: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="hxcp", description="HX-Capture-Proxy")
     ap.add_argument("--cache-dir", default=os.path.expanduser("~/loli_data/hxcp"))
+    ap.add_argument("--store-dir", default="",
+                    help="共享缓存库目录 (缓存/flow/运行态都放这里, 多个浏览器共用); 空 = 用 --cache-dir")
     ap.add_argument("--max-bytes", type=int, default=8 * 1024 * 1024)
     ap.add_argument("--seed-dir", default="")
     ap.add_argument("--allow-host", default="", help="逗号分隔; 非空则只处理这些 host 后缀")
@@ -203,6 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--record-flows", action="store_true",
                    help="把请求级 flow 落盘到 <cache-dir>/flows/ (默认只打印不落盘)")
     p.add_argument("--flow-max-body", type=int, default=0, help="flow 里 body 字段上限, 0=默认 8192")
+    p.add_argument("--client", default="cdp", help="客户端名 (通常是环境 id), 记进每条 flow")
     add_forensic_args(p)
     p.set_defaults(fn=cmd_run)
 
@@ -218,8 +224,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--verbose", action="store_true")
     p.add_argument("--record-flows", action="store_true")
     p.add_argument("--flow-max-body", type=int, default=0)
+    p.add_argument("--client", default="launch")
     add_forensic_args(p)
     p.set_defaults(fn=cmd_launch)
+
+    add_proxy_parser(sub)
 
     p = sub.add_parser("cache", help="缓存库操作")
     p.add_argument("action", choices=["stats", "list", "lookup", "purge",
@@ -231,10 +240,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--host", default="", help="flows: 按 host 后缀过滤")
     p.add_argument("--status", type=int, default=0, help="flows: 按状态码过滤")
     p.add_argument("--q", default="", help="flows: 原文子串过滤 (URL/头/参数都能命中)")
-    p.add_argument("--kind", default="", help="flows: hit | flow")
+    p.add_argument("--kind", default="", help="flows: hit | flow | tunnel")
+    p.add_argument("--client", default="", help="flows: 只看某个客户端")
     p.add_argument("--days", type=float, default=0, help="flows: 最近 N 天; flow-purge: 保留 N 天")
     p.set_defaults(fn=cmd_cache)
     a = ap.parse_args(argv)
+    if a.store_dir:
+        a.cache_dir = a.store_dir
     return int(a.fn(a) or 0)
 
 

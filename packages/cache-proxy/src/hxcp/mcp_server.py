@@ -35,9 +35,10 @@ def build_server():
     mcp = MCPServer(
         name="hx-capture-proxy",
         title="HX-Capture-Proxy",
-        instructions=("零终结 TLS 的静态缓存代理的观测面。"
-                      "用它查「某个静态资源缓存过没有 / 命中了多少次 / 缓存里正文是什么」。"
-                      "缓存位置在浏览器层 (CDP Fetch), 因此命中不产生任何网络流量。"),
+        instructions=("多浏览器共用的静态缓存代理的观测与接入面。"
+                      "用它查「怎么接入 / 某个静态资源缓存过没有 / 抓到了哪些请求 / 哪些站点在省流量」。"
+                      "两种入口: 标准 HTTP/SOCKS5 代理 (任意浏览器), CDP 档 (Chromium, 命中不出网也不改握手)。"
+                      "HTTPS 默认隧道不解密, 只有显式切到 decrypt 的 host 才会被缓存。"),
         version="0.1.0",
     )
 
@@ -98,12 +99,13 @@ def build_server():
                            "看某个响应什么时候下发了 Set-Cookie、跟进被拒缓存的 API 调用时用它。"
                            "能按 host/状态码/子串过滤。缓存索引里的东西只是流量的子集。"))
     def flow_search(host: str = "", status: int = 0, q: str = "", kind: str = "",
-                    limit: int = 50, days: float = 0) -> str:
+                    limit: int = 50, days: float = 0, client: str = "") -> str:
         s = _store()
         try:
             rows = list(flows_mod.iter_flows(
                 s.root / "flows", host=host, status=(int(status) if status else None),
-                q=q, kind=kind, limit=max(1, min(int(limit), 500)), days=(days or None)))
+                q=q, kind=kind, limit=max(1, min(int(limit), 500)), days=(days or None),
+                client=client))
             # 与 HTTP /flows 同形态 (count + flows): 同一事实两种形状就是两处判据。
             return json.dumps({"count": len(rows), "flows": rows},
                               ensure_ascii=False, indent=2)
@@ -142,6 +144,39 @@ def build_server():
                                "text": txt}, ensure_ascii=False)
         finally:
             s.close()
+
+    @mcp.tool(description=("怎么接入缓存代理: 代理地址, 每个客户端的入口端口, 浏览器/curl/Playwright 配置片段, "
+                           "CA 路径, 当前哪些 host 被解密。要让一个浏览器或程序走缓存时先调它。"))
+    def proxy_access() -> str:
+        from .access import access_info
+        s = _store()
+        try:
+            return json.dumps(access_info(s.root), ensure_ascii=False, indent=2)
+        finally:
+            s.close()
+
+    @mcp.tool(description=("按站点看缓存效果: 每个 host 的缓存条目, 占用, 已省字节, 以及 TLS 是隧道还是解密。"
+                           "判断该不该把某个静态域名切到解密时用它。"))
+    def host_summary(limit: int = 50) -> str:
+        from . import proxy_rules
+        s = _store()
+        try:
+            rules = proxy_rules.load(s.root)
+            rows = [dict(h, mode=proxy_rules.decide(rules, h["host"])[0])
+                    for h in s.host_summary(max(1, min(int(limit), 500)))]
+            return json.dumps({"rules": rules, "hosts": rows}, ensure_ascii=False, indent=2)
+        finally:
+            s.close()
+
+    @mcp.tool(description=("切换一个 host 后缀的 TLS 处理: decrypt (解密并缓存, 上游会看到代理的 TLS 指纹), "
+                           "tunnel (默认, 浏览器原生握手), never (永不解密)。约 1 秒内对新连接生效。"))
+    def set_tls_mode(host: str, mode: str) -> str:
+        from . import proxy_rules
+        try:
+            return json.dumps(proxy_rules.set_host(os.environ.get("HXCP_CACHE", DEFAULT_CACHE), host, mode),
+                              ensure_ascii=False)
+        except ValueError as e:
+            return "error: " + str(e)
 
     @mcp.tool(description="清理过期条目并回收 blob。会动磁盘, 只在确实要腾空间时用。")
     def purge_expired() -> str:
