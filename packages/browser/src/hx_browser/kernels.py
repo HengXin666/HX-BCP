@@ -28,6 +28,7 @@ Agent Note: .agents/notes/implemented/feature/2026-10-16-hxbrowser-profile-ops-n
 from __future__ import annotations
 
 import shutil
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -50,6 +51,7 @@ class Kernel:
     mode: str = "binary"  # binary: 我们起进程 + profile 目录; runner: 本机 runner 进程; external: 外部应用自管
     features: dict | None = None  # 为空 = 用族的 FEATURES
     how: str = ""  # 为空 = 用族的 HOW
+    platforms: tuple[str, ...] = ()  # 只能跑在这些宿主系统上 (sys.platform 前缀), 为空 = 不限
 
 
 # 可执行名逐行登记; 每行带 allow-legacy 标注 (门禁按行判定, 故禁止格式化器折行)
@@ -72,7 +74,7 @@ KERNELS: tuple[Kernel, ...] = (
     Kernel("librewolf", "LibreWolf", GECKO, ("librewolf",)),
     Kernel(_ID_SAFARI, "Safari (WebKitGTK MiniBrowser)", WEBKIT, _EXE_SAFARI, features=_SAFARI_FEATURES, how="MiniBrowser 参数 + user script (见 webkit.py)"),  # browser-gate: allow-legacy 内核 id
     Kernel(webkit_local.KERNEL_ID, "WebKit (Linux 本机, Playwright 构建)", WEBKIT, mode="runner", features=webkit_local.FEATURES, how=webkit_local.HOW),
-    Kernel(safarier.KERNEL_ID, "Safarier (macOS WebKit)", WEBKIT, mode="external"),
+    Kernel(safarier.KERNEL_ID, "Safarier (macOS WebKit)", WEBKIT, mode="external", platforms=("darwin",)),
 )
 # fmt: on
 _BY_ID = {k.id: k for k in KERNELS}
@@ -174,7 +176,13 @@ def _row(k: Kernel, settings) -> dict:
         source = "configured" if configured else "detected" if detected else "missing"
         note = "" if ok else ("配置的路径不存在" if configured else "未在 PATH 中找到, 可在这里填可执行文件路径")
     return {"id": k.id, "label": k.label, "family": k.family, "mode": k.mode, "path": path, "configured": configured,
-            "source": source, "available": ok, "note": note, "how": k.how or HOW[k.family], "features": features_of(k)}
+            "source": source, "available": ok, "note": note, "how": k.how or HOW[k.family], "features": features_of(k),
+            "platforms": list(k.platforms), "host_supported": host_supported(k)}
+
+
+def host_supported(k: Kernel) -> bool:
+    """本宿主能否直接跑这个内核; 不能时仍可经远程命令使用 (如 ssh 到 Mac 跑 Safarier)"""
+    return not k.platforms or sys.platform.startswith(k.platforms)
 
 
 def default_kernel(settings, rows: list[dict] | None = None) -> str:

@@ -30,6 +30,15 @@ def test_safarier_is_webkit_external():
     assert row["mode"] == "external" and row["features"]["cdp"] is False and "how" in row
 
 
+def test_safarier_is_macos_only(monkeypatch):
+    monkeypatch.setattr(kernels.sys, "platform", "linux")
+    rows = {r["id"]: r for r in kernels.list_kernels(Settings())}
+    assert rows["safarier"]["platforms"] == ["darwin"] and rows["safarier"]["host_supported"] is False
+    assert rows["chromium"]["platforms"] == [] and rows["chromium"]["host_supported"] is True  # browser-gate: allow-legacy 内核 id
+    monkeypatch.setattr(kernels.sys, "platform", "darwin")
+    assert next(r for r in kernels.list_kernels(Settings()) if r["id"] == "safarier")["host_supported"] is True
+
+
 def test_safarier_command_line_and_table():
     s = Settings(kernel_paths={"safarier": "ssh my-mac '/Applications/Safarier.app/Contents/MacOS/Safarier'"})
     cmd = safarier.command(s)

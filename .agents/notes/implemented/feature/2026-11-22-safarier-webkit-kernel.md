@@ -27,3 +27,8 @@
 
 - Safarier 没有 CDP: 登录态扫描, 实时预览, 指纹体检对它不可用; 页面自动化走 Safarier 自带 `agent` CLI.
 - 未在真实 macOS 上联调 (宿主无 Mac), 适配器按 Safarier v1.5.0 源码 ManagerCLI.swift 的命令与输出格式实现, 测试用假 CLI.
+
+## 平台标注 (2026-11-22)
+
+- `Kernel.platforms` 记内核能跑的宿主系统, Safarier 为 `darwin`; 接口行带 `platforms` 和 `host_supported`.
+- 控制台在内核页和新建环境的内核选择里标 "仅 macOS"; Linux 宿主未配远程命令时显示 "需要 macOS" 而不是 "未安装". 配了 ssh 远程命令后可用, 标签保留.

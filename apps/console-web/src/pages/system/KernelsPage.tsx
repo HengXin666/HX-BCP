@@ -8,7 +8,7 @@ import { Check, FlaskConical, RotateCw, Save, Star, X } from "lucide-react";
 import { Badge, Button, Card, CardContent, EmptyState, InputField, toast } from "@hx/ui";
 import { PageLoading } from "../PageLoading";
 import { usePoll } from "../../lib/hooks";
-import { FAMILIES, FAMILY, FEATURE_LABEL, kernelApi, kernelsDetail, type Kernel, type KernelFeatures, type ProbeResult } from "../../lib/kernels";
+import { FAMILIES, FAMILY, FEATURE_LABEL, kernelApi, kernelsDetail, missingText, platformTag, type Kernel, type KernelFeatures, type ProbeResult } from "../../lib/kernels";
 
 const SOURCE: Record<string, string> = { configured: "自定义路径", detected: "自动探测", missing: "未找到" };
 const PLACEHOLDER: Record<string, string> = {
@@ -73,7 +73,8 @@ function KernelRow(props: { k: Kernel; onChanged: () => void }): JSX.Element {
 				<div className="flex flex-wrap items-center gap-2">
 					<span className={"size-2.5 rounded-full " + FAMILY[k.family].dot} />
 					<span className="t-card">{k.label}</span>
-					{k.available ? <Badge variant="success">可用</Badge> : <Badge variant={k.source === "configured" ? "destructive" : "secondary"}>{k.source === "configured" ? "路径无效" : "未找到"}</Badge>}
+					{k.available ? <Badge variant="success">可用</Badge> : <Badge variant={k.source === "configured" ? "destructive" : "secondary"}>{k.source === "configured" ? "路径无效" : k.host_supported === false ? missingText(k) : "未找到"}</Badge>}
+					{platformTag(k) ? <Badge variant="warning" data-kernel-platform={k.id}>{platformTag(k)}</Badge> : null}
 					<Badge variant="outline">{SOURCE[k.source ?? ""] ?? "未上报"}</Badge>
 					{k.mode === "external" ? <Badge variant="warning">外部应用</Badge> : k.mode === "runner" ? <Badge variant="outline">本机 runner</Badge> : null}
 					{k.default ? <Badge variant="default"><Star className="size-3" />默认</Badge> : null}

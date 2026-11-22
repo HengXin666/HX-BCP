@@ -36,7 +36,24 @@ export type Kernel = {
 	features?: KernelFeatures;
 	default?: boolean;
 	envs?: number;
+	/** 只能跑在这些宿主系统上 (sys.platform 前缀, 如 darwin), 空 = 不限 */
+	platforms?: string[];
+	/** 本宿主能否直接跑; false 时只能经远程命令使用 */
+	host_supported?: boolean;
 };
+
+const PLATFORM_NAME: Record<string, string> = { darwin: "macOS", linux: "Linux", win32: "Windows" };
+
+/** 平台限制的标签文案, 如 "仅 macOS"; 不限平台时为空 */
+export function platformTag(k: Kernel): string {
+	const p = k.platforms ?? [];
+	return p.length ? "仅 " + p.map((x) => PLATFORM_NAME[x] ?? x).join(" / ") : "";
+}
+
+/** 不可用时的短原因: 宿主系统不支持时写 "需要 macOS" 等, 否则 "未安装" */
+export function missingText(k: Kernel): string {
+	return k.host_supported === false ? "需要 " + (k.platforms ?? []).map((x) => PLATFORM_NAME[x] ?? x).join(" / ") : "未安装";
+}
 
 export type KernelsDetail = { kernels: Kernel[]; default: string; inherit: { envs: number; blink: string; gecko: string } };
 
@@ -187,6 +204,6 @@ export function kernelFilterOptions(kernels: Kernel[], envs: Env[], view: (env: 
 	const out = [{ value: "", label: "全部内核 (" + envs.length + ")" }];
 	for (const fam of FAMILIES) out.push({ value: "fam:" + fam, label: familyStyle(fam).name + " (" + n((v) => v.family === fam) + ")" });
 	out.push({ value: "inherit", label: "未指定, 继承设置 (" + n((v) => v.how === "继承") + ")" });
-	for (const k of kernels) out.push({ value: k.id, label: shortName(k.label) + (k.available ? "" : " 未安装") + " (" + n((v) => v.id === k.id) + ")" });
+	for (const k of kernels) out.push({ value: k.id, label: shortName(k.label) + (k.available ? "" : " " + missingText(k)) + " (" + n((v) => v.id === k.id) + ")" });
 	return out;
 }
