@@ -1,7 +1,7 @@
 import { useContext, type JSX } from "react";
 import { Badge, RadioGroup, RadioGroupItem } from "@hx/ui";
 import type { Env } from "../../lib/api";
-import { FAMILIES, FAMILY, KernelContext, familyStyle, speaksCdp, type Family, type Kernel } from "../../lib/kernels";
+import { FAMILIES, FAMILY, KernelContext, familyStyle, missingText, platformTag, speaksCdp, type Family, type Kernel } from "../../lib/kernels";
 
 /**
  * 内核标识: 族色圆点 + 短名, 族色的描边底, 列宽 <= 80px. 继承设置的旧环境用虚线框 (悬停写明来源), 分得清 "指定" 与 "没指定".
@@ -39,9 +39,11 @@ function KernelOption(props: { k: Kernel; blocked: string }): JSX.Element {
 			<RadioGroupItem id={id} value={k.id} disabled={off} />
 			<span className="flex min-w-0 flex-1 flex-col">
 				<span className="t-body leading-5 text-foreground">{k.label}</span>
-				<span className="truncate font-mono t-aux text-muted-foreground" title={k.path}>{k.path || "-"}</span>
+				<span className="truncate font-mono t-aux text-muted-foreground" title={k.note || k.path}>{k.path || k.note || "-"}</span>
 			</span>
-			{!k.available ? <Badge variant="secondary">未安装</Badge> : blocked ? <Badge variant="outline">{blocked}</Badge> : !speaksCdp(k.family) ? <Badge variant="outline" title="无 CDP: Cookie 注入, 实时预览, 指纹检测不可用; 不支持 headless">无 CDP</Badge> : null}
+			{k.default ? <Badge variant="outline">默认</Badge> : null}
+			{platformTag(k) ? <Badge variant="warning">{platformTag(k)}</Badge> : null}
+			{!k.available ? <Badge variant="secondary">{missingText(k)}</Badge> : blocked ? <Badge variant="outline">{blocked}</Badge> : !speaksCdp(k.family) ? <Badge variant="outline" title="无 CDP: Cookie 注入, 实时预览, 指纹检测不可用">无 CDP</Badge> : null}
 		</label>
 	);
 }

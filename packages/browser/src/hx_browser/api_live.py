@@ -30,11 +30,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import secrets
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
+from . import api_key_gate
 from . import live_protocol as lp
 from . import live_view as lv
 from .browser import get_runtime
@@ -95,11 +97,13 @@ def _authorized(ws: WebSocket) -> bool:
         origin, ws.headers.get("host", ""), os.environ.get(ORIGINS_ENV, "")
     ):
         return False
+    if api_key_gate.human_waiver(ws):  # console page with the human session, same proof as http
+        return True
     key = settings_manager.load().api_key
     if not key:
-        return True
-    given = ws.headers.get("x-api-key", "") or ws.query_params.get("key", "")
-    return given == key
+        return False  # 2026-11-22: no key never means open, ensure_key fills one at startup
+    sent = [ws.headers.get("x-api-key", ""), ws.query_params.get("key", "")]
+    return any(v and secrets.compare_digest(v.encode(), key.encode()) for v in sent)
 
 
 async def _refuse(ws: WebSocket, message: str, code: int) -> None:

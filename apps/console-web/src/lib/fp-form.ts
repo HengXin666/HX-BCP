@@ -33,6 +33,8 @@ export type FpForm = {
 	headless: boolean;
 	tls_mode: string;
 	dark_mode: string; // "" 跟随全局, on, off
+	isolation: string; // "" = 后端默认 (有 bwrap 且能显示时沙箱), sandbox, process
+	leak_ok: boolean; // 用户勾了 我确认放开, 只在 dangers 非空时有意义
 };
 
 /** 留空时后端用的值 (models.Fingerprint 默认值), 只用于提示文字与编辑时清空字段. */
@@ -43,9 +45,15 @@ export const AUTO = {
 	color_depth: "24",
 	hardware_concurrency: "0",
 	device_memory: "0",
-	webrtc_mode: "real",
+	webrtc_mode: "proxy",
 	tls_mode: "none",
 } as const;
+
+/** 放开防泄漏的两个选项, 名字与后端 leakproof.EXPOSURES 一致. */
+export const LEAK_TEXT: Record<string, string> = {
+	webrtc_real: "WebRTC 真实: 网页可经 UDP 拿到本机真实出口 IP",
+	host_loopback: "不开沙箱: 网页可访问本机 127.0.0.1 上的服务, 并有绕开代理的直连路径",
+};
 
 export const PRESETS = {
 	resolution: ["1280x820", "1366x768", "1440x900", "1536x864", "1600x900", "1920x1080", "2560x1440", "1512x982", "1728x1117"],
@@ -58,7 +66,7 @@ export const BLANK_FORM: FpForm = {
 	device_type: "", resolution: "", color_depth: "", hardware_concurrency: "", device_memory: "",
 	user_agent: "", language: "", timezone: "", webgl_vendor: "", webgl_renderer: "",
 	canvas_noise: false, audio_noise: false, webgl_noise: false, webrtc_mode: "", webrtc_public_ip: "",
-	urls: "", extra_args: "", headless: false, tls_mode: "", dark_mode: "",
+	urls: "", extra_args: "", headless: false, tls_mode: "", dark_mode: "", isolation: "", leak_ok: false,
 };
 
 const FP_TEXT = ["os", "device_type", "resolution", "user_agent", "language", "timezone", "webgl_vendor", "webgl_renderer", "webrtc_mode", "webrtc_public_ip", "tls_mode"] as const;
@@ -77,14 +85,24 @@ export function formOf(env: Env): FpForm {
 	for (const k of FP_NUM) f[k] = str(fp[k]) === (AUTO as Record<string, string>)[k] ? "" : str(fp[k]);
 	for (const k of FP_BOOL) f[k] = Boolean(fp[k]);
 	f.dark_mode = fp.dark_mode === true ? "on" : fp.dark_mode === false ? "off" : "";
+	f.isolation = env.prefs?.isolation ?? "";
 	f.urls = (env.launch?.urls ?? []).join("\n");
 	f.extra_args = (env.launch?.extra_args ?? []).join("\n");
 	return f;
 }
 
-/** 表单项的问题, 空数组 = 可以提交. 名称可以留空 (后端起名 Env-N). */
-export function problems(f: FpForm): string[] {
+/** 本次新放开的泄漏面 (新建时选了, 或编辑时从别的值改成了危险值), 这些要用户勾选确认后带上 leak_ack. */
+export function dangers(f: FpForm, before: FpForm | null): string[] {
 	const out: string[] = [];
+	if (f.webrtc_mode === "real" && before?.webrtc_mode !== "real") out.push("webrtc_real");
+	if (f.isolation === "process" && before?.isolation !== "process") out.push("host_loopback");
+	return out;
+}
+
+/** 表单项的问题, 空数组 = 可以提交. 名称可以留空 (后端起名 Env-N). */
+export function problems(f: FpForm, before: FpForm | null = null): string[] {
+	const out: string[] = [];
+	if (dangers(f, before).length && !f.leak_ok) out.push("放开防泄漏需要先勾选 我确认放开");
 	if (f.resolution && !/^\d{3,5}x\d{3,5}$/.test(f.resolution)) out.push("分辨率写成 1920x1080");
 	for (const k of FP_NUM) if (f[k] && !(Number(f[k]) > 0)) out.push(k + " 需为正数");
 	if (f.webrtc_public_ip && !/^[\d.:a-fA-F]+$/.test(f.webrtc_public_ip)) out.push("WebRTC 公网 IP 格式不对");
@@ -118,5 +136,8 @@ export function bodyOf(f: FpForm, before: FpForm | null, kernels: Kernel[]): Bod
 	const fp = fpBody(f, before, kernels);
 	if (Object.keys(fp).length) body.fingerprint = fp;
 	if (changed("urls") || changed("extra_args")) body.launch = { urls: lines(f.urls), extra_args: lines(f.extra_args) };
+	if (changed("isolation")) body.prefs = { isolation: f.isolation || "sandbox" };
+	const risky = dangers(f, before);
+	if (risky.length && f.leak_ok) body.leak_ack = risky;
 	return body;
 }

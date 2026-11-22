@@ -1,10 +1,11 @@
 import type { JSX, ReactNode } from "react";
 import { Badge, InputField, SelectField, Switch, Textarea } from "@hx/ui";
-import { AUTO, PRESETS, type FpForm } from "../../lib/fp-form";
+import { AUTO, LEAK_TEXT, PRESETS, dangers, type FpForm } from "../../lib/fp-form";
 import type { Family, Kernel } from "../../lib/kernels";
 import { KernelPicker } from "./KernelBits";
 
 export type SectionProps = { form: FpForm; set: (patch: Partial<FpForm>) => void };
+type LeakProps = SectionProps & { before: FpForm | null };
 
 const ROOT = "__root__";
 const PICK = "__pick__";
@@ -112,7 +113,7 @@ const NOISE = "改的是看起来像谁, 不影响出口 IP 与代理";
 export function FingerprintSection({ form, set }: SectionProps): JSX.Element {
 	return (
 		<div className={GRID}>
-			<F label="User-Agent" auto="跟随内核" wide>
+			<F label="User-Agent" auto="跟随内核" hint="TLS 握手恒为内核原生, 手填的 UA 必须与内核同族同主版本, 否则拒绝启动" wide>
 				<InputField value={form.user_agent} onChange={(user_agent) => set({ user_agent })} aria-label="User-Agent" placeholder="留空 = 用内核自己的 UA" />
 			</F>
 			<F label="语言" auto="按出口 IP">
@@ -130,8 +131,8 @@ export function FingerprintSection({ form, set }: SectionProps): JSX.Element {
 			<Toggle label="Canvas 噪声" hint={"给画布像素读数加微小扰动, " + NOISE} checked={form.canvas_noise} onChange={(canvas_noise) => set({ canvas_noise })} />
 			<Toggle label="Audio 噪声" hint={"给 AudioContext 采样加微小扰动, " + NOISE} checked={form.audio_noise} onChange={(audio_noise) => set({ audio_noise })} />
 			<Toggle label="WebGL 噪声" hint={"给 WebGL 读回像素与参数加扰动, " + NOISE} checked={form.webgl_noise} onChange={(webgl_noise) => set({ webgl_noise })} />
-			<F label="WebRTC" auto="真实">
-				<Choice value={form.webrtc_mode} onChange={(webrtc_mode) => set({ webrtc_mode })} auto="自动 (真实)" options={[["real", "真实"], ["proxy", "替换为代理 IP"], ["disable", "禁用"]]} />
+			<F label="WebRTC" auto="只走代理">
+				<Choice value={form.webrtc_mode} onChange={(webrtc_mode) => set({ webrtc_mode, leak_ok: false })} auto="自动 (只走代理, 防泄漏)" options={[["proxy", "替换为代理 IP"], ["disable", "禁用"], ["real", "真实 (危险, 暴露本机 IP)"]]} />
 			</F>
 			<F label="WebRTC 公网 IP" auto="代理出口" hint="仅 替换为代理 IP 时生效">
 				<InputField value={form.webrtc_public_ip} onChange={(webrtc_public_ip) => set({ webrtc_public_ip })} aria-label="WebRTC 公网 IP" placeholder="203.0.113.7" />
@@ -140,17 +141,32 @@ export function FingerprintSection({ form, set }: SectionProps): JSX.Element {
 	);
 }
 
-export function AdvancedSection({ form, set }: SectionProps): JSX.Element {
+/** 选了放开防泄漏的值时出现的红框确认, 列出这次新放开的每一项; 勾上后请求体带 leak_ack. */
+export function LeakConfirm({ form, set, before }: LeakProps): JSX.Element | null {
+	const risky = dangers(form, before);
+	if (!risky.length) return null;
+	return (
+		<label data-leak-confirm="" className="flex items-start justify-between gap-3 rounded-md border border-destructive px-3 py-2">
+			<span className="flex flex-col gap-1">
+				<span className="t-aux text-destructive">我确认放开防泄漏</span>
+				{risky.map((k) => <span key={k} className="t-aux text-muted-foreground">{LEAK_TEXT[k]}</span>)}
+			</span>
+			<Switch checked={form.leak_ok} onCheckedChange={(leak_ok) => set({ leak_ok })} aria-label="我确认放开防泄漏" />
+		</label>
+	);
+}
+
+export function AdvancedSection({ form, set, before }: LeakProps): JSX.Element {
 	return (
 		<div className={GRID}>
+			<F label="隔离" auto={before ? undefined : "沙箱"} hint="沙箱里只有经代理这一条出网路径; 本机缺 bwrap 或 Xephyr 时后端自动退回进程隔离并标出原因" wide>
+				<Choice value={form.isolation} onChange={(isolation) => set({ isolation, leak_ok: false })} auto={before ? "沙箱" : "自动 (能开就开沙箱)"} options={[["sandbox", "沙箱 (bwrap)"], ["process", "直连宿主回环 (危险)"]]} />
+			</F>
 			<F label="启动 URL" auto="空白页" hint="每行一个" wide>
 				<Textarea value={form.urls} onChange={(e) => set({ urls: e.target.value })} rows={3} aria-label="启动 URL" placeholder="https://github.com/login" />
 			</F>
 			<F label="额外启动参数" auto="" hint="每行一个, 原样传给浏览器" wide>
 				<Textarea value={form.extra_args} onChange={(e) => set({ extra_args: e.target.value })} rows={2} aria-label="额外启动参数" placeholder="--disable-gpu" className="font-mono" />
-			</F>
-			<F label="TLS 模式" auto={AUTO.tls_mode}>
-				<Choice value={form.tls_mode} onChange={(tls_mode) => set({ tls_mode })} auto="自动 (不处理)" options={[["none", "不处理"], ["chrome", "Chrome 指纹 (tls-proxy)"]]} />
 			</F>
 			<F label="暗色主题" auto="跟随全局">
 				<Choice value={form.dark_mode} onChange={(dark_mode) => set({ dark_mode })} auto="跟随全局设置" options={[["on", "强制暗色"], ["off", "强制亮色"]]} />

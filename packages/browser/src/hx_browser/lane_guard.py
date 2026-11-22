@@ -13,6 +13,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 API_PREFIX = "/api/v1"
+API_KEY_HEADER = "x-api-key"
 PUBLIC_PATHS = {"/api/v1/status", "/api/v1/lane/session"}
 ENV_PATH = re.compile(r"^/api/v1/environments/([^/]+)(/.*)?$")
 ENV_FIXED = {"batch", "import-profile", "login-states"}
@@ -45,7 +46,8 @@ _scope: contextvars.ContextVar[lane.Decision | None] = contextvars.ContextVar("b
 def decide_from(conn) -> lane.Decision:
     """Admission decision for one request or websocket (an HTTPConnection).
 
-    project from header or ?project=; human proof is a loopback socket peer, the console session
+    project from header or ?project=; a request carrying x-api-key is pinned to the agent lane.
+    human proof is a loopback socket peer (only when settings.human_loopback is on), the console session
     cookie when the browser marks the request as coming from a page of this origin, or the token
     header (rules and order in lane.decide). The peer is conn.client, the socket address uvicorn
     reports; hxb serve runs uvicorn with proxy_headers off so no X-Forwarded-For can rewrite it.
@@ -54,9 +56,20 @@ def decide_from(conn) -> lane.Decision:
     project = headers.get(lane.HEADER_PROJECT, "") or query.get("project", "")
     from_self = lane.same_origin(headers.get("host", ""), headers.get("origin", ""), headers.get("sec-fetch-site", ""))
     peer = conn.client.host if conn.client else ""
+    loopback = loopback_enabled() and lane.loopback_admitted(peer, headers.get("host", ""))
     return lane.decide(headers.get(lane.HEADER_LANE, ""), headers.get(lane.HEADER_HUMAN_TOKEN, ""), project,
                        session=conn.cookies.get(lane.SESSION_COOKIE, ""), from_self=from_self,
-                       loopback=lane.loopback_admitted(peer, headers.get("host", "")))
+                       loopback=loopback, agent_credential=bool(headers.get(API_KEY_HEADER, "")))
+
+
+def loopback_enabled() -> bool:
+    """settings.human_loopback: loopback peers count as human only when the owner turned it on, off by default.
+
+    Agent Note: .agents/notes/implemented/feature/2026-11-22-lane-convergence.md
+    """
+    from .config import settings_manager
+
+    return bool(settings_manager.load().human_loopback)
 
 
 def current() -> lane.Decision | None:

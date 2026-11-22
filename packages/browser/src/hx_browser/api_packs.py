@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from . import account_pack as ap
-from . import cdp
+from . import cdp, leakproof
 from .api_common import fail, ok, store
 from .browser import get_runtime, parse_cookies
 from .config import settings_manager
@@ -49,13 +49,17 @@ class ImportPackReq(BaseModel):
     password: str = ""
     target_env_id: str = ""
     name: str = ""
+    leak_ack: list[str] = []
 
 
 @router.post("/account-packs/import")
 async def import_pack(payload: ImportPackReq):
     s = store()
     target = s.get_env(payload.target_env_id) if payload.target_env_id else None
+    before = leakproof.exposures(target) if target else None
     env = await ap.import_account_pack(payload.pack, payload.password, target)
+    if forced := leakproof.force_safe(env, payload.model_dump(), before):
+        s.add_log("env.leak-guard", {"id": env.id, "forced": forced, "via": "account-pack"})
     if payload.name:
         env.name = payload.name
     if target is None:
@@ -73,6 +77,7 @@ class ImportProfileReq(BaseModel):
     mode: str = "copy"  # copy | move | reference
     name: str = ""
     fingerprint: dict | None = None
+    leak_ack: list[str] = []
 
 
 @router.post("/environments/import-profile")
@@ -90,6 +95,8 @@ async def import_profile(payload: ImportProfileReq):
     if payload.fingerprint:
         env.fingerprint = Fingerprint(**{**env.fingerprint.model_dump(), **payload.fingerprint})
     env.id = "env_" + __import__("secrets").token_hex(5)
+    if forced := leakproof.force_safe(env, payload.model_dump()):
+        s.add_log("env.leak-guard", {"id": env.id, "forced": forced, "via": "import-profile"})
     s.add_env(env)
     dst = settings_manager.profiles_dir() / env.id
     n = ap.import_firefox_profile(src, dst, payload.mode)

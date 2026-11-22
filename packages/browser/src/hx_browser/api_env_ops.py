@@ -5,10 +5,10 @@ Agent Note: .agents/notes/implemented/architecture/2026-11-01-api-split.md
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 
 from . import account_pack as ap
-from . import cdp, folders, hxcp_link, lane_guard, profile_ops
+from . import cdp, folders, hxcp_link, lane_guard, leakproof, profile_ops
 from .api_common import fail, manager, ok, store
 from .browser import get_runtime, wait_window_verdict
 from .config import settings_manager
@@ -65,6 +65,7 @@ async def update_env(env_id: str, payload: dict):
     env = s.get_env(env_id)
     if not env:
         raise HTTPException(404, "环境不存在")
+    exposed_before = leakproof.exposures(env)
     if "name" in payload:
         env.name = str(payload["name"])
     if "folder" in payload:  # lane and project are never taken from the payload
@@ -87,6 +88,8 @@ async def update_env(env_id: str, payload: dict):
             model = getattr(env, field)
             setattr(env, field, type(model)(**{**model.model_dump(), **payload[field]}))
     if errors := profile_ops.apply_extras(env, payload):
+        return fail("; ".join(errors))
+    if errors := leakproof.check(env, payload, exposed_before):
         return fail("; ".join(errors))
     s.update_env(env)
     s.add_log("env.update", {"id": env.id})
@@ -126,6 +129,13 @@ async def batch_create(payload: dict):
             env.fingerprint = type(env.fingerprint)(**{**env.fingerprint.model_dump(), **p["fingerprint"]})
         if p.get("proxy"):
             env.proxy = type(env.proxy)(**{**env.proxy.model_dump(), **p["proxy"]})
+        if p.get("prefs"):
+            env.prefs = type(env.prefs)(**{**env.prefs.model_dump(), **p["prefs"]})
+        if errors := profile_ops.apply_extras(env, p):
+            return fail("; ".join(errors))
+        leakproof.apply_defaults(env, p)
+        if errors := leakproof.check(env, p):
+            return fail("; ".join(errors))
         s.add_env(env)
         created_ids.append(env.id)
     s.add_log("env.batch-create", {"count": len(created_ids)})
@@ -133,7 +143,8 @@ async def batch_create(payload: dict):
 
 
 @router.post("/environments/{env_id}/duplicate")
-async def duplicate_env(env_id: str):
+async def duplicate_env(env_id: str, payload: dict | None = Body(default=None)):
+    """Copy a browser, the copy keeps the source acks and must pass the same leak check as a new one."""
     s = store()
     src = s.get_env(env_id)
     if not src:
@@ -142,6 +153,8 @@ async def duplicate_env(env_id: str):
     new_env.id = "env_" + __import__("secrets").token_hex(5)
     new_env.name = f"{src.name}-copy"
     new_env.runtime = {}
+    if errors := leakproof.check(new_env, payload):
+        return fail("; ".join(errors))
     s.add_env(new_env)
     s.add_log("env.duplicate", {"src": env_id, "id": new_env.id})
     return ok(env_dict(new_env))

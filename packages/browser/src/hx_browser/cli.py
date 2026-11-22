@@ -9,10 +9,10 @@ import logging
 def build_parser() -> argparse.ArgumentParser:
     """构造 hxb 的参数解析器, 无子命令时按 serve 处理."""
     p = argparse.ArgumentParser(prog="hxb", description="HX-Browser web service")
-    p.set_defaults(host="0.0.0.0", port=None, reload=False)
+    p.set_defaults(host="127.0.0.1", port=None, reload=False)
     sub = p.add_subparsers(dest="cmd")
     s = sub.add_parser("serve", help="run the HX-Browser web service")
-    s.add_argument("--host", default="0.0.0.0", help="listen host (default 0.0.0.0)")
+    s.add_argument("--host", default="127.0.0.1", help="listen host (default 127.0.0.1, 0.0.0.0 opens it to the LAN)")
     s.add_argument("--port", type=int, default=None, help="listen port (default from settings, 8325)")
     s.add_argument("--reload", action="store_true", help="dev auto-reload")
     return p
@@ -28,12 +28,23 @@ def serve(host: str, port: int | None, reload: bool) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     print(f"\n  HX-Browser listening on http://{host}:{port}")
     print(f"  API:    http://{host}:{port}/api/v1/status")
-    print(f"  Web UI: http://{host}:{port}/\n")
+    print(f"  Web UI: http://{host}:{port}/")
+    print(unlock_line(port) + "\n")
     # proxy_headers off: the human lane trusts a loopback socket peer (lane.loopback_admitted), and
     # uvicorn would otherwise replace the peer with X-Forwarded-For sent by a trusted proxy address
     uvicorn.run("hx_browser.api:create_app", host=host, port=port, reload=reload, factory=True,
                 proxy_headers=False)
     return 0
+
+
+def unlock_line(port: int) -> str:
+    """Console unlock link valid for 10 minutes (lane.unlock_code), or how to create the local token."""
+    import lane
+
+    code = lane.unlock_code()
+    if not code:
+        return "  Unlock: no local human token yet, run: bcp-lane issue"
+    return f"  Unlock: http://127.0.0.1:{port}/#/unlock?code={code}  (10 min, then: bcp-lane unlock-url)"
 
 
 def main(argv: list[str] | None = None) -> int:

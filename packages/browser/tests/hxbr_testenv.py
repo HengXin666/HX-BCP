@@ -17,23 +17,27 @@ from hx_browser import api, api_common, config, store  # noqa: E402
 from hx_browser.models import Settings  # noqa: E402
 
 
+TEST_PROJECT = "test"
+TEST_KEY = "test-key"
+
+
 def isolate(tmp_path: Path) -> Path:
     """把全局 settings/store/manager 指到 tmp_path; 返回 data_dir. """
     data = tmp_path / "data"
     data.mkdir(parents=True, exist_ok=True)
     config.settings_manager.path = data / "settings.json"
     config.settings_manager.save(
-        Settings(data_dir=str(data), chromium_path="", firefox_path="")
+        Settings(data_dir=str(data), chromium_path="", firefox_path="", api_key=TEST_KEY)
     )
     store.store_singleton = None
     api_common._manager = None
     return data
 
 
-TEST_PROJECT = "test"
 
 
 def client(tmp_path: Path, headers: dict | None = None):
-    """TestClient on an isolated data dir, agent lane with project test unless headers say otherwise."""
+    """TestClient on an isolated data dir, agent lane (project test + api key) unless headers say otherwise."""
     isolate(tmp_path)
-    return TestClient(api.create_app(), headers={"x-bcp-project": TEST_PROJECT} if headers is None else headers)
+    agent = {"x-bcp-project": TEST_PROJECT, "x-api-key": TEST_KEY}
+    return TestClient(api.create_app(), headers=agent if headers is None else headers)

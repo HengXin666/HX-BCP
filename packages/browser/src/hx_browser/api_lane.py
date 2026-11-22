@@ -41,15 +41,17 @@ async def session_state(request: Request):
     """Whether this caller is admitted to the human lane right now, and by what (loopback, session, token)."""
     d = lane_guard.decide_from(request)
     human = d.ok and d.lane == lane.HUMAN
-    return ok({"human": human, "by": d.audit.get("by", "") if human else "", "ttl_s": lane.TOKEN_TTL_S})
+    return ok({"human": human, "by": d.audit.get("by", "") if human else "", "ttl_s": lane.TOKEN_TTL_S,
+               "loopback": lane_guard.loopback_enabled()})
 
 
 @router.post("/lane/session")
-async def session_open(request: Request, token: str = Body("", embed=True)):
-    """Trade the local human token for a console session cookie, same-origin pages only."""
+async def session_open(request: Request, token: str = Body("", embed=True), code: str = Body("", embed=True)):
+    """Trade the local human token, or a short lived unlock code from hxb serve / bcp-lane unlock-url,
+    for a console session cookie, same-origin pages only."""
     if not _from_self(request):
         return fail("console session only for pages of this origin", code="lane_forbidden", status=403)
-    if not lane.human_token_valid(token):
+    if not (lane.human_token_valid(token) or lane.unlock_valid(code)):
         return fail("wrong or missing local human token, see bcp-lane issue", code="human_token_required",
                     status=401)
     res = ok({"human": True, "ttl_s": lane.TOKEN_TTL_S})

@@ -6,6 +6,7 @@ import type { Env, EnvFingerprint } from "../../lib/api";
 import { detailApi, downloadJson, type CookieItem, type FpObserved } from "../../lib/api-res";
 import { usePoll } from "../../lib/hooks";
 import { Section } from "./DetailParts";
+import { SiteChecks } from "./SiteChecks";
 
 type Level = "ok" | "warn" | "bad" | "info";
 type Item = { name: string; expect: string; got: string; level: Level; note: string };
@@ -52,8 +53,18 @@ export function verdictOf(items: Item[]): "green" | "yellow" | "red" {
 	return "green";
 }
 
-/** 指纹页: GET /fingerprint/check, 30 秒重测一次, 可手动重测. */
+/** 指纹页: 上面是浏览器内实测 (30 秒一次), 下面是检测站评分与一致性自检 (手动开跑). */
 export function FingerprintTab(props: { env: Env }): JSX.Element {
+	return (
+		<div className="flex flex-col gap-3">
+			<LiveFp env={props.env} />
+			<SiteChecks env={props.env} />
+		</div>
+	);
+}
+
+/** GET /fingerprint/check, 30 秒重测一次, 可手动重测. */
+function LiveFp(props: { env: Env }): JSX.Element {
 	const id = props.env.id;
 	const check = usePoll(useCallback((s: AbortSignal) => detailApi.fpCheck(id, s), [id]), 30000);
 	const r = check.result;

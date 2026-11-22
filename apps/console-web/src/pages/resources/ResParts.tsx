@@ -1,8 +1,9 @@
-/** 资源三页共用的小件: 工具条 (搜索 + 右侧按钮), 行内图标按钮, 删除确认, 表单行, 时间格式. */
+/** 资源三页共用的小件: 工具条 (搜索 + 右侧按钮), 空态, 行内图标按钮, 删除确认, 表单行, 时间格式. */
 import type { JSX, ReactNode } from "react";
-import { Search } from "lucide-react";
-import { Button, Input, confirmDialog, toast } from "@hx/ui";
+import { Plus, Search } from "lucide-react";
+import { Button, EmptyState, Input, confirmDialog, toast } from "@hx/ui";
 import type { Result } from "../../lib/api";
+import { optimistic } from "../../lib/cache";
 
 export function ResToolbar(props: { query: string; onQuery: (q: string) => void; placeholder: string; count: number; children?: ReactNode }): JSX.Element {
 	return (
@@ -17,6 +18,15 @@ export function ResToolbar(props: { query: string; onQuery: (q: string) => void;
 	);
 }
 
+/**
+ * 资源表的空态, 三页同一套: 有搜索词时是 "没有匹配" 加清除搜索, 库为空时是一句用途说明加新建按钮.
+ */
+export function ResEmpty(props: { kind: string; query: string; onClear: () => void; hint: string; onCreate: () => void }): JSX.Element {
+	if (props.query.trim())
+		return <EmptyState text={"没有匹配的" + props.kind} hint="换个关键字试试" action={<Button size="sm" variant="outline" onClick={props.onClear}>清除搜索</Button>} />;
+	return <EmptyState text={props.kind + "库是空的"} hint={props.hint} action={<Button size="sm" onClick={props.onCreate}><Plus className="size-4" />{"新建" + props.kind}</Button>} />;
+}
+
 export function IconBtn(props: { label: string; onClick: () => void; children: ReactNode; disabled?: boolean }): JSX.Element {
 	return (
 		<Button size="icon-sm" variant="ghost" title={props.label} aria-label={props.label} disabled={props.disabled} onClick={props.onClick}>
@@ -25,11 +35,14 @@ export function IconBtn(props: { label: string; onClick: () => void; children: R
 	);
 }
 
-/** 删除前确认, 确认后执行并提示结果. 返回是否删掉了. */
-export async function confirmRemove(kind: string, name: string, remove: () => Promise<Result<unknown>>): Promise<boolean> {
+/**
+ * 删除前确认, 确认后执行并提示结果. 返回是否删掉了.
+ * 给了 drop (列表缓存键与行 id) 时走乐观更新: 确认后该行立即从列表消失, 失败回滚 (见 lib/cache.optimistic).
+ */
+export async function confirmRemove(kind: string, name: string, remove: () => Promise<Result<unknown>>, drop?: { key: string; id: string }): Promise<boolean> {
 	const yes = await confirmDialog({ title: "删除" + kind + " " + name + "?", message: "删除后不可恢复.", confirmLabel: "删除", cancelLabel: "保留", variant: "danger" });
 	if (!yes) return false;
-	const r = await remove();
+	const r = drop ? await optimistic<{ id: string }[], unknown>(drop.key, (list) => list.filter((x) => x.id !== drop.id), remove) : await remove();
 	if (r.ok) toast.success("已删除 " + name);
 	else toast.error("删除失败: " + r.error);
 	return r.ok;

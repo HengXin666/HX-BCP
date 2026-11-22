@@ -10,6 +10,7 @@ Linux 版 Web 服务化浏览器环境管理器(参考 local-browser 二次开�
 - **账号包**: 按域名导出登录态(Cookie + 指纹)<100KB, 任意机器导入即恢复登录态
 - **批量注册对接**: 直接导入 ruyipage / Firefox userdir(如 `data/freebuff-register/userdir_*`), 登录态 100% 保留
 - **沙箱隔离** (`prefs.isolation=sandbox`, 需 bwrap): 独立 PID/IPC/UTS/**网络**命名空间 (出网只经本副本代理 relay, 访问不到宿主回环服务, WebRTC/UDP 无路可走)、只给本副本专属的显示 server (Xvfb / Xephyr 嵌套 / Wayland socket)、系统字体白名单、seccomp 拒绝表; 宿主内核仍共享, 详见 `.agents/notes/implemented/feature/2026-10-16-hxbrowser-strict-isolation.md`
+- **默认防泄漏** (2026-11-15): 新建环境 (含批量 / 模板 / 复制 / 导入 / MCP) 默认 `webrtc_mode=proxy` + 本机能开就开 sandbox (出网只经 relay); 显式放开要在请求体带 `leak_ack: ["webrtc_real" | "host_loopback"]`, 否则拒绝; 导入路径未确认的放开会被拉回守住。判据只在 `leakproof.py`, 环境视图的 `leak` 字段给出当前泄漏面与原因
 - **窗口系统**: 默认 X11 (含 XWayland); `prefs.window_system=wayland` 走原生 Wayland (此时窗口无法被外部定位)
 - **字体隔离** (`prefs.font_isolation=baseline|custom`, 所有内核): 网页只能枚举白名单字体, 中文字体总是保留
 
@@ -165,4 +166,4 @@ uv run pytest tests/ -v         # 冒烟测试
 ## 路线
 
 - v0.1(本版): 环境隔离 / 指纹(MV3)/ 代理 / Cookie 注入 / 账号包 / profile 导入 / CDP 接入
-- v0.2: TLS 指纹(uTLS 代理)、Firefox 扩展注入、IndexedDB 导出、账号包加密 UI
+- v0.2: TLS 一致性(不改握手: 出口侧 ClientHello 只读探针 + UA 与内核同族同主版本, 矛盾拒绝启动)、Firefox 扩展注入、IndexedDB 导出、账号包加密 UI

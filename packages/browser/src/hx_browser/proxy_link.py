@@ -200,19 +200,27 @@ def egress_upstream(proxy, environ: dict) -> Upstream:
     if up is not None:
         return up
     if proxy is not None and proxy.type == "system":
-        for key in (
-            "HTTPS_PROXY",
-            "https_proxy",
-            "ALL_PROXY",
-            "all_proxy",
-            "HTTP_PROXY",
-            "http_proxy",
-        ):
-            if environ.get(key):
-                cfg = parse_link(environ[key])
-                return Upstream(cfg["type"], cfg["host"], int(cfg["port"]),
-                                cfg.get("username") or "", cfg.get("password") or "")  # fmt: skip
+        link = system_proxy_link(environ)
+        if link:
+            cfg = parse_link(link)
+            return Upstream(cfg["type"], cfg["host"], int(cfg["port"]),
+                            cfg.get("username") or "", cfg.get("password") or "")  # fmt: skip
     return Upstream(DIRECT, "", 0)
+
+
+def system_proxy_link(environ: dict) -> str:
+    """system 模式实际挂的代理: 服务进程代理环境变量里第一个非空值, 没有返回空串."""
+    for key in (
+        "HTTPS_PROXY",
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+    ):
+        if environ.get(key):
+            return environ[key]
+    return ""
 
 
 def chromium_proxy_args(proxy, relay_port: int) -> list[str]:

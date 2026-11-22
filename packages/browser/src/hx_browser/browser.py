@@ -32,7 +32,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import cdp, desktop, guard, kernels, launch_hooks, relay, webkit, window, xvfb
+from . import cdp, desktop, dnsleak, external, guard, kernels, launch_hooks, relay, webkit, window, xvfb
 
 # parse_cookies 是 api.py 的既有入口, 在这里再导出保持导入路径不变
 from .cookies import _inject_firefox_cookies, parse_cookies  # noqa: F401
@@ -126,6 +126,11 @@ class BrowserManager:
         refresh_runtime()
         if env.id in RUNTIME:
             raise RuntimeError(f"环境 {env.name} 已在运行")
+        if external.handles(env.fingerprint.kernel):  # engines we do not spawn as a binary (external.py)
+            plan = desktop.resolve_display(env, headless_default=self.settings.headless_default)
+            RUNTIME[env.id] = info = await external.start(env, self.settings, self.env_profile_dir(env), plan)
+            _save_runtime()
+            return info
         index = max(env.serial_no - 1, 0)
         port = next_port(self.settings.cdp_base_port, index)
         profile_dir = self.env_profile_dir(env)
@@ -137,7 +142,7 @@ class BrowserManager:
 
         try:
             # 启动视图: 语言/时区已替换为实际生效值, 代理 relay 已就绪 (见 launch_hooks)
-            prep = await launch_hooks.prepare(env, profile_dir, plan, port)
+            prep = await launch_hooks.prepare(env, profile_dir, plan, port, self.settings)
             launch = prep.env
             if kernels.family_of(launch) == kernels.WEBKIT:
                 pid, executable = await webkit.launch(launch, profile_dir, port, plan, self._spawn)
@@ -171,10 +176,10 @@ class BrowserManager:
         )
         RUNTIME[env.id] = info
         _save_runtime()  # 启动即落盘: 服务重启才能找回这条账
-
-        # 后台：窗口断言 + 等 CDP 就绪 + Cookie 注入 + 登录态检查
+        # 后台：窗口断言 + 等 CDP 就绪 + Cookie 注入 + 登录态检查 + DNS 泄漏探针 (仅自定义上游)
         _WINDOW_TASKS[env.id] = asyncio.create_task(self._assert_window_safe(env, info))
         asyncio.create_task(self._post_start(env, info))
+        asyncio.create_task(dnsleak.run_after_start(env, info))
         return info
 
     async def _assert_window_safe(self, env: Environment, info: RuntimeInfo) -> None:
@@ -468,6 +473,11 @@ class BrowserManager:
     async def _stop(self, env: Environment, timeout: float = 10.0) -> bool:
         info = RUNTIME.get(env.id)
         proc = _PROCS.get(env.id)
+        if info and external.handles(info.kernel):
+            await external.stop(self.settings, info)
+            RUNTIME.pop(env.id, None)
+            _save_runtime()
+            return True
         # 已退出/僵尸的进程: 直接 reap 并清账, 不做无谓的等待与 kill。
         # (原实现这里判活为真 -> 空等满 10s -> killpg 对僵尸无效 -> 永远显示运行中)
         if info and info.pid and not _pid_alive(info.pid):

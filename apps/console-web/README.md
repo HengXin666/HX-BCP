@@ -72,5 +72,5 @@ HX-BCP 的控制台, React + TypeScript + @hx/ui. 两个页签: 浏览器 / 状�
 3. `store.bytes_served` 是缓存累计返回给浏览器的字节数, 不是节省字节, 页面上必须写清.
 4. 服务未启动时接口返回 ok=false 而不是抛异常, 页面显示"未连接".
 5. 不带 `x-bcp-lane: human` 的请求按 Agent 通道处理, 缺项目名回 400. 前端每个请求都带这个头 (`HUMAN_HEADERS`).
-7. 8325 设了 `api_key` 时, `api.py` 的中间件除 `/` 外都要 `x-api-key`, 静态资源也会 401; 控制台不发这个头, 这种配置下打不开 (既有行为, 未改).
+7. 8325 设了 `api_key` 时, `/api/*`, `/mcp*`, `/docs`, `/redoc`, `/openapi.json` 要 `x-api-key`, 静态资源不守; 人类通道请求 (本机回环, 会话 cookie 或令牌头) 免 key, `/api/v1/lane/session` 不守. 判定在 `hx_browser/api_key_gate.py`, 见 `.agents/notes/implemented/bug-fix/2026-11-15-console-api-key-401.md`.
 6. TreeNav (@hx/ui v0.1.2) 不支持拖拽, 移动浏览器用 "移动到文件夹" 对话框, 见 `.review/hx-ui-issue.md`.

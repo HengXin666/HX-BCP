@@ -19,6 +19,8 @@ hxb = "hx_browser.cli:main"
 [project.optional-dependencies]
 # crypto for account-pack password encryption
 crypto = ["cryptography>=42.0"]
+# local WebKit kernel (webkit_local.py); then: playwright install --with-deps webkit
+webkit = ["playwright>=1.45"]
 
 [dependency-groups]
 dev = ["pytest>=8.0", "playwright>=1.45", "selenium>=4.20", "drissionpage>=4.0"]

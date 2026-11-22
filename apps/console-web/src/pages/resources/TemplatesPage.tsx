@@ -8,9 +8,10 @@ import { Pencil, Plus, Stamp, Trash2 } from "lucide-react";
 import { Button, DataTable, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Textarea, toast, type DataTableColumn } from "@hx/ui";
 import { templateApi, type TemplateBody, type TemplateItem } from "../../lib/api-res";
 import { envApi, runBatch } from "../../lib/api-write";
+import { KEYS } from "../../lib/cache";
 import { usePoll } from "../../lib/hooks";
 import { EnvPicker, useHumanEnvs } from "./EnvPicker";
-import { IconBtn, ResToolbar, Row, confirmRemove, fmtTime, matchAny, submit } from "./ResParts";
+import { IconBtn, ResEmpty, ResToolbar, Row, confirmRemove, fmtTime, matchAny, submit } from "./ResParts";
 
 type Edit = { mode: "create" } | { mode: "edit"; item: TemplateItem } | null;
 
@@ -143,7 +144,7 @@ export function TemplatesPage(): JSX.Element {
 				<div className="flex justify-end gap-1">
 					<IconBtn label="应用到环境" onClick={() => setApplyTo(t)}><Stamp className="size-4" /></IconBtn>
 					<IconBtn label="编辑" onClick={() => setEdit({ mode: "edit", item: t })}><Pencil className="size-4" /></IconBtn>
-					<IconBtn label="删除" onClick={() => void confirmRemove("模板", t.name, () => templateApi.remove(t.id)).then((ok) => ok && res.reload())}><Trash2 className="size-4" /></IconBtn>
+					<IconBtn label="删除" onClick={() => void confirmRemove("模板", t.name, () => templateApi.remove(t.id), { key: KEYS.templates, id: t.id }).then((ok) => ok && res.reload())}><Trash2 className="size-4" /></IconBtn>
 				</div>
 			),
 		},
@@ -151,11 +152,11 @@ export function TemplatesPage(): JSX.Element {
 
 	if (res.result && !res.result.ok && !all.length) return <EmptyState text="未连接" hint={"GET /api/v1/templates 失败: " + res.result.error} />;
 	return (
-		<div className="flex flex-col gap-3" data-res-page="templates">
+		<div className="flex min-w-0 flex-col gap-3" data-res-page="templates">
 			<ResToolbar query={q} onQuery={setQ} placeholder="搜索名称, 说明, 指纹" count={rows.length}>
 				<Button size="sm" onClick={() => setEdit({ mode: "create" })}><Plus className="size-4" />新建模板</Button>
 			</ResToolbar>
-			<DataTable columns={cols} rows={rows} rowKey={(t) => t.id} loading={res.loading && !res.result} emptyText={q ? "没有匹配的模板" : "还没有模板, 点新建模板添加"} bare />
+			<DataTable columns={cols} rows={rows} rowKey={(t) => t.id} loading={res.loading && !res.result} empty={<ResEmpty kind="模板" query={q} onClear={() => setQ("")} hint="把常用的指纹与启动页存成模板, 新建或改环境时套用" onCreate={() => setEdit({ mode: "create" })} />} bare />
 			<TplDialog target={edit} busy={busy} onClose={() => setEdit(null)} onSubmit={(b) => void save(b)} />
 			<ApplyDialog item={applyTo} onClose={() => setApplyTo(null)} onDone={() => setApplyTo(null)} />
 		</div>

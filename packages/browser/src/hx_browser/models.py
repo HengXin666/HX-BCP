@@ -7,7 +7,7 @@ from __future__ import annotations
 import time
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from lane import HUMAN as LANE_HUMAN
 
@@ -63,8 +63,19 @@ class Fingerprint(BaseModel):
     webrtc_mode: str = "real"  # real | proxy | disable
     webrtc_public_ip: str = ""
     headless: bool = False  # 环境级可见性; 与全局 headless_default 取或 (desktop.resolve_display)
-    tls_mode: str = "none"  # none | chrome(tls-proxy, v0.2)
+    # 外部引擎 (webkit/safarier) 里对应的 profile id, 由 safarier.ensure_profile 回填
+    external_profile: str = ""
+    tls_mode: str = "none"  # 只读标注, 握手恒为内核原生, 旧值 chrome 读入时归一为 none
     dark_mode: bool | None = None  # None=跟随全局设置; True=强制暗色主题
+
+    @field_validator("tls_mode", mode="before")
+    @classmethod
+    def _native_tls(cls, value: Any) -> str:
+        """握手没有可选模式, 任何取值都归一为 none.
+
+        Agent Note: .agents/notes/implemented/feature/2026-11-15-hxbrowser-ua-kernel-coherence.md
+        """
+        return "none"
 
 
 class Launch(BaseModel):
@@ -110,6 +121,8 @@ class Environment(BaseModel):
     open_count: int = 0
     # 阶段 1: 可选自动挂载 hxcp 缓存代理 (CDP Fetch 层)
     hxcp_enabled: bool = False
+    # 2026-11-15 leak exposures the user accepted on purpose, names and judge in leakproof.py
+    leak_ack: list[str] = Field(default_factory=list)
     # 运行时 (不持久化)
     runtime: dict[str, Any] = Field(default_factory=dict, exclude=True)
 
@@ -150,12 +163,15 @@ class RuntimeInfo(BaseModel):
     reason: str = ""  # visible=false 时**必须**非空, 说明为什么用户看不见
     # ---- 2026-10-16 ----
     kernel: str = ""  # 实际启动的内核 id
+    remote_pid: int = 0  # 外部引擎 (safarier 经 ssh 等远程命令) 在对端机器上的 pid, 本机不判活
     relay_port: int = 0  # 本地代理 relay 端口 (0 = 未用 relay)
     isolation: str = "process"  # process | sandbox
     config_hash: str = ""  # 启动时的配置摘要; 与当前不同 = 待重启
     # ---- 阶段 1: hxcp ----
     hxcp_pid: int = 0
     hxcp_status: str = ""  # running | stopped | failed | ""
+    # ---- 2026-11-15: 启动后 DNS 泄漏探针结果, 形状同 doctor 检查项 (见 dnsleak.py) ----
+    dns_leak: dict[str, Any] = Field(default_factory=dict)
 
 
 class Proxy(BaseModel):
@@ -207,3 +223,7 @@ class Settings(BaseModel):
     dark_mode: bool = False  # 浏览器实例默认暗色主题 (prefers-color-scheme: dark)
     # 内核 id -> 可执行文件路径 (覆盖自动探测); 例 {"chrome": "/opt/google/chrome/chrome"}
     kernel_paths: dict[str, str] = Field(default_factory=dict)
+    # 2026-11-22: 新建环境的默认内核 id, 空 = cloak 可用用 cloak, 否则第一个可用的 (kernels.default_kernel)
+    default_kernel: str = ""
+    # 2026-11-22: 本机回环是否直接算人类通道, 默认关; 开了等于本机任何脚本都能用人类接口
+    human_loopback: bool = False

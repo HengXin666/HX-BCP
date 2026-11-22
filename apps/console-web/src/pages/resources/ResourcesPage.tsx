@@ -6,6 +6,7 @@ import { PageTitle } from "../PageTitle";
 import { ExtensionsPage } from "./ExtensionsPage";
 import { ProxiesPage } from "./ProxiesPage";
 import { TemplatesPage } from "./TemplatesPage";
+import { formatHash } from "../../lib/router";
 
 export const RES_TABS = [
 	{ id: "proxies", label: "代理", icon: Network },
@@ -19,12 +20,12 @@ export function resTabOf(sub: string | undefined): ResTab {
 	return RES_TABS.some((t) => t.id === sub) ? (sub as ResTab) : "proxies";
 }
 
-export function ResourcesPage(props: { sub: string | undefined; onSub: (id: string) => void }): JSX.Element {
+export function ResourcesPage(props: { sub: string | undefined; onSub?: (id: string) => void }): JSX.Element {
 	const tab = resTabOf(props.sub);
 	return (
-		<div className="flex flex-col gap-4">
+		<div className="flex min-w-0 flex-col gap-4">
 			<PageTitle title="资源" desc="代理, 扩展与指纹模板, 新建浏览器时可直接选用" />
-			<NavTabs items={RES_TABS.map((t) => ({ id: t.id, label: t.label, icon: t.icon }))} value={tab} onChange={props.onSub} />
+			<NavTabs items={RES_TABS.map((t) => ({ id: t.id, label: t.label, icon: t.icon }))} value={tab} onChange={props.onSub ?? ((id: string) => (window.location.hash = formatHash(["resources", id])))} />
 			<div key={tab} data-res-tab={tab} className="animate-in fade-in-0 duration-200">
 				{tab === "proxies" ? <ProxiesPage /> : tab === "extensions" ? <ExtensionsPage /> : <TemplatesPage />}
 			</div>

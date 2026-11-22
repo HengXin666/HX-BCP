@@ -2,6 +2,7 @@
 
 Agent Note: .agents/notes/implemented/feature/2026-10-16-hxbrowser-profile-ops-nodecloak.md
 Agent Note: .agents/notes/implemented/feature/2026-10-16-hxbrowser-strict-isolation.md
+Agent Note: .agents/notes/implemented/feature/2026-11-15-hxbrowser-egress-tls-probe.md
 
 为什么要它见 proxy_link.py 模块头 (Chromium 不解析 --proxy-server 里的 user:pass)。
 
@@ -30,7 +31,7 @@ import os
 import ssl
 import struct
 
-from . import bridge
+from . import bridge, tlsprobe
 from .proxy_link import DIRECT, SOCKS5, Upstream
 
 log = logging.getLogger("hx_browser.relay")
@@ -159,11 +160,14 @@ async def open_tunnel(up: Upstream, host: str, port: int):
     return await _http_connect(up, host, port)
 
 
-async def _pipe(src: asyncio.StreamReader, dst: asyncio.StreamWriter) -> None:
+async def _pipe(src: asyncio.StreamReader, dst: asyncio.StreamWriter, tap=None) -> None:
+    """逐字节转发; tap 只读已转发的字节, 返回 True 后不再调用."""
     with contextlib.suppress(Exception):
         while chunk := await src.read(65536):
             dst.write(chunk)
             await dst.drain()
+            if tap is not None and tap(chunk):
+                tap = None
     with contextlib.suppress(Exception):
         dst.close()
 
@@ -195,14 +199,16 @@ def _rewrite_plain(head: bytes, up: Upstream) -> tuple[bytes, str, int]:
 
 
 async def _handle(
-    up: Upstream, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    up: Upstream, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, env_id: str = ""
 ) -> None:
+    tap = None
     try:
         head = await asyncio.wait_for(_read_header(reader), CONNECT_TIMEOUT)
         method = head.split(b" ", 1)[0].upper()
         if method == b"CONNECT":
             host, port = _split_target(head.split(b" ", 2)[1].decode("latin-1"), 443)
             u_reader, u_writer = await open_tunnel(up, host, port)
+            tap = tlsprobe.tap_for(env_id, "%s:%d" % (host, port))
             writer.write(ESTABLISHED)
         else:
             body, host, port = _rewrite_plain(head, up)
@@ -212,7 +218,7 @@ async def _handle(
                 u_reader, u_writer = await _open_upstream(up)
             u_writer.write(body)
         await writer.drain()
-        await asyncio.gather(_pipe(reader, u_writer), _pipe(u_reader, writer))
+        await asyncio.gather(_pipe(reader, u_writer, tap), _pipe(u_reader, writer))
     except Exception as e:  # noqa: BLE001 — 任何上游失败都回 502, 绝不回落直连
         log.debug("relay to %s failed: %s", up.redacted(), e)
         with contextlib.suppress(Exception):
@@ -224,21 +230,22 @@ async def _handle(
 
 
 class Relay:
-    def __init__(self, up: Upstream):
+    def __init__(self, up: Upstream, env_id: str = ""):
         self.upstream = up
+        self.env_id = env_id  # 临时探测 relay 为空, 不捕获握手
         self.server: asyncio.AbstractServer | None = None
         self.port = 0
         self.unix_path = ""
 
     async def start_unix(self, path: str) -> None:
         """沙箱副本的入口: 只有仅属主可连的 Unix socket, 宿主上不开任何 TCP 端口可供借用。"""
-        cb = lambda r, w: _handle(self.upstream, r, w)  # noqa: E731
+        cb = lambda r, w: _handle(self.upstream, r, w, self.env_id)  # noqa: E731
         self.server = await bridge.private_unix_server(cb, path, MAX_HEADER * 2)
         self.unix_path = path
 
     async def start(self, port: int = 0) -> int:
         self.server = await asyncio.start_server(
-            lambda r, w: _handle(self.upstream, r, w),
+            lambda r, w: _handle(self.upstream, r, w, self.env_id),
             LOOPBACK,
             port,
             limit=MAX_HEADER * 2,
@@ -272,7 +279,7 @@ async def ensure(env_id: str, up: Upstream, port: int = 0, unix_path: str = "") 
     ):
         return cur.port
     await stop(env_id)
-    relay = Relay(up)
+    relay = Relay(up, env_id)
     if unix_path:
         await relay.start_unix(unix_path)
         RELAYS[env_id] = relay
@@ -289,6 +296,7 @@ async def stop(env_id: str) -> None:
         env_id
     )  # 沙箱副本的 CDP 桥与 relay 同生共死 (所有停止路径都走这里)
     relay = RELAYS.pop(env_id, None)
+    tlsprobe.forget(env_id)  # 握手样本只属于一次启动
     if relay is not None:
         await relay.close()
 

@@ -1,5 +1,7 @@
 # Agent Note: 本机回环直接算人类通道
 
+> 2026-11-22 起默认关闭, 改为设置 human_loopback 开关, 见 2026-11-22-lane-convergence.md.
+
 日期: 2026-11-01. 证据: .review/loopback-human.md
 
 ## Problem

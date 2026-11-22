@@ -125,7 +125,8 @@ def test_legacy_hard_delete_still_works(c):
 
 
 def test_doctor_fix_backup_and_restore(c):
-    env_id = _create(c, name="doc", proxy={"link": "http://u:p@127.0.0.1:8080"})["id"]
+    env_id = _create(c, name="doc", proxy={"link": "http://u:p@127.0.0.1:8080"},
+                     fingerprint={"webrtc_mode": "real"}, leak_ack=["webrtc_real"])["id"]  # fmt: skip
     prof = c.data_dir / "profiles" / env_id / "Default"
     prof.mkdir(parents=True)
     (prof / "Preferences").write_text('{"before": true}')

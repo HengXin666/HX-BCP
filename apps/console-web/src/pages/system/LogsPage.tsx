@@ -8,6 +8,7 @@ import { RotateCw, Search } from "lucide-react";
 import { Button, EmptyState, InputGroup, InputGroupAddon, InputGroupInput, LogViewer, SelectField, Switch, type LogLevel, type LogLine } from "@hx/ui";
 import { systemApi, type LogEntry } from "../../lib/api-res";
 import { usePoll } from "../../lib/hooks";
+import { PageLoading } from "../PageLoading";
 
 const LIMITS = [100, 200, 500];
 
@@ -37,9 +38,10 @@ export function LogsPage(): JSX.Element {
 		return [...data].reverse().map(toLine).filter((l) => !w || l.message.toLowerCase().includes(w));
 	}, [data, q]);
 
+	if (res.loading && !res.result) return <PageLoading rows={10} />;
 	if (res.result && !res.result.ok && !latest.length) return <EmptyState text="未连接" hint={"GET /api/v1/logs 失败: " + res.result.error} />;
 	return (
-		<div className="flex flex-col gap-3" data-sys-page="logs" data-log-count={lines.length}>
+		<div className="flex min-w-0 flex-col gap-3" data-sys-page="logs" data-log-count={lines.length}>
 			<div className="flex flex-wrap items-center gap-2">
 				<div className="min-w-48 flex-1">
 					<InputGroup>
@@ -53,7 +55,7 @@ export function LogsPage(): JSX.Element {
 					{live ? "自动刷新并滚到最新" : "已冻结"}
 				</label>
 				<Button size="sm" variant="outline" onClick={() => (setFrozen(null), res.reload())}><RotateCw className="size-4" />刷新</Button>
-				<span className="ml-auto t-aux text-muted-foreground">{lines.length + " / " + data.length + " 条"}</span>
+				<span className="ml-auto t-aux tabular-nums text-muted-foreground">{lines.length + " / " + data.length + " 条"}</span>
 			</div>
 			{lines.length ? (
 				<LogViewer lines={lines} height="calc(100dvh - 15rem)" showTime />

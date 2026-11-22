@@ -1,6 +1,8 @@
-"""Lane scope over REST and MCP: 400 without project, agent sees own project, human reads agent browsers only, loopback is human.
+"""Lane scope over REST and MCP: 400 without project, agent sees own project, human reads agent browsers only,
+an api key never reaches the human lane, loopback is human only when settings.human_loopback is on.
 
 Agent Note: .agents/notes/implemented/feature/2026-11-01-lane-folders.md
+Agent Note: .agents/notes/implemented/feature/2026-11-22-lane-convergence.md
 """
 
 from __future__ import annotations
@@ -31,8 +33,11 @@ def c(tmp_path):
         yield client
 
 
+KEY = {"x-api-key": hxbr_testenv.TEST_KEY}
+
+
 def _agent(project):
-    return {lane.HEADER_PROJECT: project}
+    return {lane.HEADER_PROJECT: project, **KEY}
 
 
 def _human(token):
@@ -46,12 +51,24 @@ def _create(c, headers, **body):
 
 
 def test_agent_create_without_project_is_400(c):
-    r = c.post(API + "/environments", json={"name": "x"})
+    r = c.post(API + "/environments", json={"name": "x"}, headers=KEY)
     assert r.status_code == 400 and r.json()["code"] == "project_required"
     r = c.post(API + "/environments", json={"name": "x"}, headers=_agent("Bad Name!"))
     assert r.status_code == 400
-    assert c.get(API + "/environments").status_code == 400
+    assert c.get(API + "/environments", headers=KEY).status_code == 400
     assert c.get(API + "/status").status_code == 200
+
+
+def test_agent_without_api_key_is_401(c):
+    r = c.get(API + "/environments", headers={lane.HEADER_PROJECT: "crawler-a"})
+    assert r.status_code == 401 and r.json()["code"] == "api_key_required"
+
+
+def test_api_key_can_not_claim_human_lane(c, token):
+    r = c.get(API + "/environments", headers={**_human(token), **KEY})
+    assert r.status_code == 403 and r.json()["code"] == "lane_forbidden"
+    assert c.get(API + "/access", headers=_agent("crawler-a")).status_code == 403
+    assert c.get(API + "/access", headers=_human(token)).json()["data"]["api_key"] == hxbr_testenv.TEST_KEY
 
 
 def test_human_without_token_is_401(c, token):
@@ -67,23 +84,50 @@ def local(tmp_path):
         yield client
 
 
-def test_loopback_human_needs_no_token(local, tmp_path, monkeypatch):
+def _loopback(on):
+    s = hxbr_testenv.config.settings_manager.load()
+    s.human_loopback = on
+    hxbr_testenv.config.settings_manager.save(s)
+
+
+def test_loopback_is_not_human_by_default(local, tmp_path, monkeypatch):
     monkeypatch.setattr(lane, "TOKEN_FILE", tmp_path / "none.token")
+    r = local.get(API + "/environments", headers={lane.HEADER_LANE: "human"})
+    assert r.status_code == 401
+    s = local.get(API + "/lane/session", headers={lane.HEADER_LANE: "human"}).json()["data"]
+    assert s["human"] is False and s["loopback"] is False
+
+
+def test_loopback_human_when_enabled(local, tmp_path, monkeypatch):
+    monkeypatch.setattr(lane, "TOKEN_FILE", tmp_path / "none.token")
+    _loopback(True)
     r = local.get(API + "/environments", headers={lane.HEADER_LANE: "human"})
     assert r.status_code == 200 and r.json()["code"] == 0
     s = local.get(API + "/lane/session", headers={lane.HEADER_LANE: "human"}).json()["data"]
     assert s["human"] is True and s["by"] == "loopback"
+    r = local.get(API + "/environments", headers={lane.HEADER_LANE: "human", **KEY})
+    assert r.status_code == 403
 
 
 def test_loopback_without_lane_header_is_still_agent(local):
-    r = local.get(API + "/environments")
+    _loopback(True)
+    r = local.get(API + "/environments", headers=KEY)
     assert r.status_code == 400 and r.json()["code"] == "project_required"
 
 
 def test_loopback_with_foreign_host_is_refused(local, tmp_path, monkeypatch):
     monkeypatch.setattr(lane, "TOKEN_FILE", tmp_path / "none.token")
+    _loopback(True)
     r = local.get(API + "/environments", headers={lane.HEADER_LANE: "human", "host": "evil.example:8325"})
     assert r.status_code == 401 and r.json()["code"] == "human_token_required"
+
+
+def test_unlock_code_opens_console_session(local, token):
+    code = lane.unlock_code()
+    head = {"origin": "http://127.0.0.1:8325"}
+    r = local.post(API + "/lane/session", json={"code": code}, headers=head)
+    assert r.status_code == 200 and r.json()["data"]["human"] is True
+    assert local.post(API + "/lane/session", json={"code": "1.bad"}, headers=head).status_code == 401
 
 
 def test_remote_fake_token_and_forwarded_for_are_401(c, token):
@@ -146,7 +190,7 @@ def test_folders_stay_inside_their_group(c, token):
 def test_mcp_requires_project(c):
     def rpc(args):
         body = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "create_profile", "arguments": args}}
-        return c.post("/mcp", json=body).json()["result"]
+        return c.post("/mcp", json=body, headers=KEY).json()["result"]
 
     missing = rpc({"name": "x"})
     assert missing["isError"] is True and "project" in missing["content"][0]["text"]

@@ -37,9 +37,9 @@ export function OrphansPage(): JSX.Element {
 
 	if (res.result && !res.result.ok) return <EmptyState text="未连接" hint={"GET /api/v1/orphans 失败: " + res.result.error} />;
 	return (
-		<div className="flex flex-col gap-3" data-sys-page="orphans" data-orphan-count={list.length}>
+		<div className="flex min-w-0 flex-col gap-3" data-sys-page="orphans" data-orphan-count={list.length}>
 			<div className="flex flex-wrap items-center gap-2">
-				<span className="t-body">{"孤儿进程 " + list.length + " 个, 涉及环境 " + envs.size + " 个"}</span>
+				<span className="t-body tabular-nums">{"孤儿进程 " + list.length + " 个, 涉及环境 " + envs.size + " 个"}</span>
 				<Button size="sm" variant="outline" className="ml-auto" onClick={res.reload}><RotateCw className="size-4" />重新扫描</Button>
 				<Button size="sm" variant="destructive" disabled={!list.length} onClick={() => void cleanup()}><Eraser className="size-4" />全部清理</Button>
 			</div>
