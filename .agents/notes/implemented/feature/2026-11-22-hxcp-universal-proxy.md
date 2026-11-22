@@ -25,6 +25,9 @@ hxcp 只有 CDP 档 (Fetch 拦截), 只有 Chromium 系能接; Firefox / WebKit 
 5. **共享缓存的正确性**: `Vary` 含 cookie / authorization / user-agent / sec-ch-ua* / `*` 不入库;
    带 Range 或 Authorization 的请求不读不写缓存.
 
+6. **控制台改用 @hx/ui**: 源码 `apps/hxcp-web` (React + TS, 与 `apps/console-web` 同一套组件与令牌), 构建产物写进
+   `hxcp/web` 由 hxcp.api 托管, CI 加 typecheck + build. 不用 CodeBlock: 它带 shiki 全部语法, 产物多 10 MB.
+
 ## Alternatives considered
 
 - **自己写 asyncio MITM + uTLS 伪装上游握手** (最强理由: 不引入 mitmproxy). 否决: 本仓 2026-09-18 A/B 已证
@@ -33,6 +36,8 @@ hxcp 只有 CDP 档 (Fetch 拦截), 只有 Chromium 系能接; Firefox / WebKit 
 - **全部解密 + 尽量模仿浏览器握手**. 否决: 结构性做不到与真身相同, 默认就会改指纹. 只给按 host 显式开启.
 - **每个浏览器一个代理进程**. 否决: 共享缓存要么跨进程同一个库 (可以做, CDP 档就是这样), 要么一个进程多入口;
   代理档选后者, 进程少且 hosts 统计集中.
+- **控制台继续原生 JS** (最强理由: hxcp 是 uv 项目, 不需要 node). 否决: 维护者要求与主控制台同一套组件;
+  运行时仍不需要 node, 只托管产物.
 - **PAC 里按 host 分流 (解密的走代理, 其余 DIRECT)**. 否决: 浏览器出口就不再统一经过上游, 与出口代理冲突.
 
 ## Consequences

@@ -1,102 +1,19 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>hxcp 缓存代理</title>
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css">
-<!-- Served by hxcp.api. Plain JS without a build chain, see README section 前端.
-     All asset and API paths are relative so the page works under a sub path. -->
-</head>
-<body>
-<header>
-  <div class="brand"><span class="pulse" id="pulse"></span><b>hxcp</b><span class="dim">缓存代理</span></div>
-  <nav id="nav">
-    <a href="#overview" data-view="overview">总览</a>
-    <a href="#flows" data-view="flows">抓包</a>
-    <a href="#cache" data-view="cache">缓存</a>
-    <a href="#hosts" data-view="hosts">主机与 TLS</a>
-    <a href="#access" data-view="access">接入</a>
-  </nav>
-  <div class="hstat" id="headStat">--</div>
-</header>
-
-<section id="view-overview" class="view">
-  <div class="cards" id="kpis"></div>
-  <div class="grid2">
-    <div class="panel"><h3>最省流量的站点</h3><div id="topHosts" class="bars"></div></div>
-    <div class="panel"><h3>判定分布</h3><div id="reasons" class="bars"></div></div>
-  </div>
-  <div class="panel"><h3>接入的客户端</h3><div id="clientList"></div></div>
-</section>
-
-<section id="view-flows" class="view">
-  <div class="bar">
-    <input id="fHost" placeholder="host 后缀">
-    <input id="fStatus" placeholder="状态" class="w60">
-    <input id="fQ" placeholder="关键字 (URL / 头 / 参数)">
-    <select id="fClient"><option value="">全部客户端</option></select>
-    <select id="fKind"><option value="">全部类型</option><option value="flow">flow</option><option value="hit">命中</option><option value="tunnel">隧道</option></select>
-    <select id="fVia"><option value="">全部入口</option><option value="proxy">代理档</option><option value="cdp">CDP 档</option></select>
-    <select id="fDays"><option value="1">最近 1 天</option><option value="3">3 天</option><option value="7">7 天</option><option value="0">全部</option></select>
-    <button class="pri" id="btnReload">查询</button>
-    <label class="chk"><input type="checkbox" id="live"> 实时</label>
-    <span class="spacer"></span>
-    <a id="harLink" class="btn" href="flows.har">导出 HAR</a>
-  </div>
-  <div id="spark"></div>
-  <div id="sparkLegend"><span id="tMin"></span><span>请求时序, 红色 = 4xx/5xx</span><span id="tMax"></span></div>
-  <main class="split">
-    <div class="list" id="listPane">
-      <table>
-        <thead><tr><th>#</th><th>时间</th><th>客户端</th><th>方法</th><th>host / path</th><th>状态</th><th>大小</th><th>耗时</th><th>TLS</th><th>判定</th></tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-      <div class="more"><button id="btnMore" class="hidden">加载更多</button><span id="listStat" class="dim"></span></div>
-    </div>
-    <div class="detail" id="detail"><div class="empty">选一条请求看头与体</div></div>
-  </main>
-</section>
-
-<section id="view-cache" class="view">
-  <div class="bar">
-    <input id="cQ" placeholder="URL 片段">
-    <select id="cOrder"><option value="hits">按命中</option><option value="recent">按时间</option><option value="size">按体积</option></select>
-    <button class="pri" id="cReload">查询</button>
-    <span class="spacer"></span>
-    <button id="cPurge">清理过期</button>
-  </div>
-  <main class="split">
-    <div class="list"><table><thead><tr><th>URL</th><th>类型</th><th>大小</th><th>命中</th><th>来源</th><th>入库</th><th></th></tr></thead><tbody id="cRows"></tbody></table></div>
-    <div class="detail" id="cDetail"><div class="empty">选一条缓存看正文预览</div></div>
-  </main>
-</section>
-
-<section id="view-hosts" class="view">
-  <div class="panel warnbox">
-    默认所有 HTTPS 走 <b>隧道</b>: 浏览器自己握手, TLS 指纹与直连相同, 但代理看不到内容, 也就缓存不了.
-    把纯静态的 CDN 切到 <b>解密</b> 才能缓存它们. 代价: 这些 host 的上游会看到代理的 TLS 指纹, 浏览器要信任本地 CA (见 接入).
-    建议只解密静态资源域名, 登录 / API / 风控相关域名放进 <b>永不解密</b>.
-  </div>
-  <div class="bar">
-    <input id="hQ" placeholder="过滤 host">
-    <input id="hAdd" placeholder="手动添加 host 后缀">
-    <button id="hAddDec">加入解密</button>
-    <button id="hAddNever">加入永不解密</button>
-    <span class="spacer"></span>
-    <label class="chk"><input type="checkbox" id="hAll"> 全部解密 (仅调试)</label>
-  </div>
-  <div class="list full"><table><thead><tr><th>host</th><th>当前</th><th>连接</th><th>客户端</th><th>缓存条目</th><th>占用</th><th>已省</th><th>切换</th></tr></thead><tbody id="hRows"></tbody></table></div>
-</section>
-
-<section id="view-access" class="view">
-  <div id="accessBox"></div>
-</section>
-
-<div id="toast"></div>
-<script src="core.js"></script>
-<script src="views.js"></script>
-<script src="flows.js"></script>
-</body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+		<title>hxcp 缓存代理</title>
+		<script type="module" crossorigin src="./assets/index-DnEgsOln.js"></script>
+		<link rel="modulepreload" crossorigin href="./assets/vendor-react-u5fn3FFE.js">
+		<link rel="modulepreload" crossorigin href="./assets/vendor-DUXHXdnD.js">
+		<link rel="modulepreload" crossorigin href="./assets/vendor-icons-BAVdPAB6.js">
+		<link rel="modulepreload" crossorigin href="./assets/vendor-hx-ui-F6bVc_0a.js">
+		<link rel="stylesheet" crossorigin href="./assets/vendor-BnuhLJ6X.css">
+		<link rel="stylesheet" crossorigin href="./assets/index-5YZf4U6C.css">
+	</head>
+	<body>
+		<div id="root"></div>
+	</body>
 </html>

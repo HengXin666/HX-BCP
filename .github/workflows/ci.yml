@@ -60,3 +60,26 @@ jobs:
               run: pnpm typecheck
             - name: build
               run: pnpm build
+
+    hxcp-console:
+        name: hxcp 控制台构建
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: apps/hxcp-web
+        steps:
+            - uses: actions/checkout@v4
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 9
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+                  cache-dependency-path: apps/hxcp-web/pnpm-lock.yaml
+            - name: install
+              run: pnpm install --frozen-lockfile
+            - name: typecheck
+              run: pnpm typecheck
+            - name: build
+              run: pnpm build

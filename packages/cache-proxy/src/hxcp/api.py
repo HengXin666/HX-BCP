@@ -187,7 +187,7 @@ def build_app(store: Store, token: str = "") -> "FastAPI":
 
     # ── 静态前端 ──────────────────────────────────────────
     # 挂载在最后: / 是个 catch-all, 先注册它会把上面的路由全吞掉。
-    # 单文件原生 JS (web/index.html), 不引入 npm 构建链 —— 理由见该文件里的注释。
+    # web/ 是 apps/hxcp-web (React + @hx/ui) 的构建产物, 源码与构建方式见该目录 README。
     # **页面本身不设闸** (它不含任何数据), 数据端点各自 gate(): 浏览器发不出 Bearer,
     # 若连 HTML 都要 token, 用户只能看到一片白屏且不知道为什么。
     if os.path.isdir(WEB_DIR):

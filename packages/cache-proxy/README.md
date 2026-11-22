@@ -177,7 +177,7 @@ uv run python tests/e2e_proxy.py      # 真 mitmproxy: 两个客户端共用缓�
 | `cdp.py` | CDP 会话原语 (单 reader + 重入安全 + 超时不停) |
 | `engine.py` | 拦截决策 + 被动捕获 + 流量计量 |
 | `launcher.py` | 起停环境 (精确匹配停止 + 用后即清) |
-| `web/` | 控制台 (原生 JS, 由 `api.py` 直接托管, 无构建链) |
+| `web/` | 控制台构建产物 (源码 `apps/hxcp-web`, 由 `api.py` 直接托管) |
 | `cli.py` / `api.py` / `mcp_server.py` | 三个入口, 共用上面同一份 core |
 
 ## 抓包 (请求级 flow)
@@ -245,18 +245,18 @@ curl -s "localhost:8898/flow/body?sha256=SHA256&limit=131072"
 
 ## 前端 (控制台)
 
-`api.py` 直接托管 `src/hxcp/web/` (index.html + core.js / views.js / flows.js + style.css), **根路径 `/` 就是它**。
-所有请求都是相对路径, 经 HX-Webx `/proxy/hxcp/` 子路径打开同样可用。
+源码在 `apps/hxcp-web/` (React + TypeScript + @hx/ui, 与 `apps/console-web` 同一套组件与设计令牌),
+`pnpm build` 直接写进 `src/hxcp/web/`, 由 `api.py` 托管, **根路径 `/` 就是它**。
+产物里的资源与 API 都是相对路径, 经 HX-Webx `/proxy/hxcp/` 子路径打开同样可用。
 
-- **总览**: 本轮已省流量, 字节节省率, 命中率, 累计已省, 最省流量的站点, 判定分布, 接入的客户端;
+截图: `docs/screenshots/` (总览, 抓包, 缓存, 主机与 TLS, 接入, 浅色主题)。
+
+- **总览**: 本轮已省流量, 字节节省率, 命中率, 累计已省, 最省流量的站点 (柱图), 判定分布 (环图), 接入的客户端;
 - **抓包**: 按 host / 状态 / 关键字 / 客户端 / 类型 / 入口 / 时间过滤 (条件写进地址栏, 可分享), 实时尾随,
-  时序密度条, 详情 (概览 / 请求头 / 响应头 / 请求体 / 原始 JSON), 复制为 curl / fetch, 一键导出 HAR;
-- **缓存**: 条目搜索与排序, 正文预览, 单条删除, 清理过期;
+  时序密度条, 详情 (curl / 请求头 / 响应头 / 请求体 / JSON), 复制为 curl / fetch, 一键导出 HAR;
+- **缓存**: 条目搜索与排序, 抽屉里看正文预览, 单条删除, 清理过期;
 - **主机与 TLS**: 每个 host 的连接数, 客户端, 缓存规模, 已省字节, 一键切换 隧道 / 解密 / 永不解密;
 - **接入**: 入口列表, Chrome / Firefox / Playwright / Puppeteer / curl / 环境变量 / PAC / 系统代理配置片段, CA 下载与信任步骤, Agent 的 API 与 MCP。
-
-**技术选型仍是原生 JS, 不引 npm 构建链**: 理由同前 (hxcp 是 uv 项目, 交互只有过滤 / 选中 / 切换)。
-拆成多个文件只是为了遵守单文件 500 行。
 
 ## 未做
 
