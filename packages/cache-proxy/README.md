@@ -1,10 +1,43 @@
 # cache-proxy
 
-省流缓存代理: 只缓存静态资源, 不终结 TLS, 动态请求原样透传。
+多浏览器共用的静态缓存代理 + 抓包观测面。两种入口, 一份缓存:
 
-**零终结 TLS 的静态缓存路由代理 + 抓包观测面。**
-缓存放在**浏览器层** (CDP Fetch), 因此命中不产生网络流量, 也**不产生任何 TLS 握手** ——
-指纹与直连逐项相同。
+| 入口 | 谁能用 | HTTPS | 命中时 |
+|---|---|---|---|
+| **代理档** `hxcp proxy` | 任何能配代理的浏览器 / 程序 / Agent (HTTP 或 SOCKS5) | 默认隧道, 按 host 显式解密 | 本地应答, 不建上游连接 |
+| **CDP 档** `hxcp run` | Chromium 系 (要 CDP) | 浏览器原生握手, 永不解密 | 不出网, 也没有握手 |
+
+所有入口写同一个缓存库, 一个浏览器拉过的 js/css/字体/图片, 另一个浏览器直接命中。
+每条 flow 带 `client` (哪个浏览器) 与 `tls` (隧道 / 解密 / 明文 / 原生)。
+
+## 代理档 (所有浏览器)
+
+```bash
+uv sync --extra api --extra proxy
+uv run hxcp --cache-dir ~/loli_data/hxcp/_shared proxy --port 8899
+# 每个浏览器一个入口, 各自的出口代理, 共用缓存:
+uv run hxcp --cache-dir ~/loli_data/hxcp/_shared proxy --port 8899 \
+    --client envA=8901,http://user:pw@egress-a:3128 --client envB=8902,http://egress-b:3128 \
+    --socks-port 0
+uv run python -m hxcp.api --cache-dir ~/loli_data/hxcp/_shared --port 8898   # 控制台 http://127.0.0.1:8898/
+```
+
+浏览器侧只要把代理指向入口 (`--proxy-server=http://127.0.0.1:8901`, Firefox 网络设置, 系统代理, PAC 均可)。
+控制台 **接入** 页给出每种客户端的现成配置, 同样的内容 `GET /access` / MCP `proxy_access` 也能拿到。
+
+**HTTPS 怎么处理 (指纹)**:
+
+- 默认 **隧道**: 代理只看 SNI, 字节原样转发, 浏览器自己与站点握手, JA3/JA4 与直连相同。代价是看不到内容, 缓存不了。
+- **解密**: 在控制台 主机与 TLS 页 (或 `POST /rules/host {host, mode}` / MCP `set_tls_mode`) 把纯静态 CDN 切过去,
+  这些 host 才会被缓存。代价: 上游看到的是代理的握手 (OpenSSL), 浏览器要信任本地 CA (`GET /ca.crt`)。
+- **永不解密**: 登录 / API / 风控相关域名放这里, 即使开了全部解密也走隧道。
+- 规则在 `<cache-dir>/proxy-rules.json`, 代理约 1 秒内热加载, 只影响新连接。
+
+**共享缓存的安全线** (policy.py): `Set-Cookie` / `no-store` / `private` / 敏感路径不入库;
+`Vary` 含 cookie / authorization / user-agent / sec-ch-ua 的响应不入库 (换一个浏览器身份会拿错);
+带 `Range` 或 `Authorization` 的请求不读也不写缓存。
+
+## CDP 档 (Chromium, 命中零握手)
 
 ## 为什么不是 MITM
 
@@ -58,9 +91,11 @@ uv run hxcp cache export-seed --out ./cache_seed   # 新环境冷启动即命中
 
 ```bash
 uv run python -m hxcp.api --cache-dir ~/loli_data/hxcp --port 8898 --token TOKEN
-# GET  /            -> 抓包流前端 (单文件原生 JS, 见下节)
+# GET  /            -> 控制台 (总览 / 抓包 / 缓存 / 主机与 TLS / 接入)
+# GET  /access /clients /hosts /runtimes /rules /ca.crt /proxy.pac /flows.har
+# PUT  /rules   POST /rules/host {host, mode}   DELETE /entry?url=
 # GET  /health /stats /entries?q=&limit= /lookup?url= /body?url=
-# GET  /flows?host=&status=&q=&kind=&days=&limit=&offset=
+# GET  /flows?host=&status=&q=&kind=&client=&via=&since=&days=&limit=&offset=
 # GET  /flow/body?sha256=&offset=&limit=   -> 取证档完整体 (分段读)
 # POST /purge /engine/stop
 ```
@@ -70,6 +105,7 @@ uv run python -m hxcp.api --cache-dir ~/loli_data/hxcp --port 8898 --token TOKEN
 ```bash
 uv run python -m hxcp.mcp_server    # stdio
 # 工具: cache_stats / cache_search / cache_lookup / cache_body / purge_expired
+#       flow_search / flow_stats / flow_payload / proxy_access / host_summary / set_tls_mode
 ```
 
 ## 运行态 (跨进程观测)
@@ -122,6 +158,7 @@ uv run python tests/e2e_api.py        # 真 uvicorn + 真 HTTP
 uv run python tests/e2e_mcp.py        # 真 stdio MCP + 真客户端协议
 uv run python tests/e2e_web.py        # 真 uvicorn 托管的页面 + 数据端点读写
 uv run python tests/e2e_forensic.py   # 真浏览器发真 POST -> 取证档 -> 按引用逐字节取回
+uv run python tests/e2e_proxy.py      # 真 mitmproxy: 两个客户端共用缓存, flow 按客户端打标
 ```
 
 端到端跑完会**自动清理** profile 与进程 (本仓库历史上堆过几十个残留 profile)。
@@ -132,11 +169,15 @@ uv run python tests/e2e_forensic.py   # 真浏览器发真 POST -> 取证档 -> 
 |---|---|
 | `store.py` | 内容寻址缓存 (SQLite 索引 + blob), 带 `SCHEMA_VERSION`, 版本不符即重建 |
 | `policy.py` | 该缓存什么 (静态类型直缓存 / JSON 需正向头 / Set-Cookie 永不缓存 / 敏感路径拒绝) |
-| `flows.py` | 请求级 flow 记录 (JSONL 按天切分, 非阻塞写) + 查询/统计/清理 |
+| `flows.py` / `flows_query.py` | 请求级 flow 记录 (JSONL 按天切分, 非阻塞写, 多进程安全) / 查询统计清理 |
+| `proxy.py` / `proxy_addon.py` | 代理档: mitmproxy 入口编排 / 缓存与 flow 钩子 (隧道或解密按 host 决定) |
+| `proxy_rules.py` | 哪些 host 解密, `proxy-rules.json` 热加载 |
+| `runtime.py` | 多实例运行态 (`runtime/<instance>.json`) 与汇总 |
+| `access.py` / `api_access.py` | 接入方式, PAC, HAR 导出 / 对应的 HTTP 路由 |
 | `cdp.py` | CDP 会话原语 (单 reader + 重入安全 + 超时不停) |
 | `engine.py` | 拦截决策 + 被动捕获 + 流量计量 |
 | `launcher.py` | 起停环境 (精确匹配停止 + 用后即清) |
-| `web/index.html` | 抓包流前端 (单文件原生 JS, 由 `api.py` 直接托管, 无构建链) |
+| `web/` | 控制台 (原生 JS, 由 `api.py` 直接托管, 无构建链) |
 | `cli.py` / `api.py` / `mcp_server.py` | 三个入口, 共用上面同一份 core |
 
 ## 抓包 (请求级 flow)
@@ -202,26 +243,20 @@ curl -s "localhost:8898/flow/body?sha256=SHA256&limit=131072"
 的扫描成本跟着涨; 而实测只有 1446/45700 条带请求体、其中 309 条被截断, 真正需要的完整体是少数。
 为少数记录付全表的代价, 是拿观测面的性能换个别记录的完整。
 
-## 前端 (抓包流)
+## 前端 (控制台)
 
-`api.py` 直接托管单文件页面 `src/hxcp/web/index.html`, **根路径 `/` 就是它**。
+`api.py` 直接托管 `src/hxcp/web/` (index.html + core.js / views.js / flows.js + style.css), **根路径 `/` 就是它**。
+所有请求都是相对路径, 经 HX-Webx `/proxy/hxcp/` 子路径打开同样可用。
 
-- **请求列表**: 时间 (跨天带日期) / `+Δ` 距上一条的间隔 / 方法 / host+path / 状态 / 大小 / 判定;
-- **点开看头与体**: 概览 / 请求头 / 响应头 / 请求体四个标签, `cookie`、`authorization`、`set-cookie` 标红;
-  请求体被截断时给出提示, 并可直接**取回完整体** (走 `/flow/body`);
-- **过滤**: host / 状态码 / 关键字 / kind / 时间范围, **条件写进 URL** (`?days=7&host=api.github.com`), 可分享可刷新;
-- **时序**: 顶部密度条按时间分布, 4xx/5xx 标红, 两端标出时间范围;
-- 自动刷新 5s 可选; 列表分页 300 条一页。
+- **总览**: 本轮已省流量, 字节节省率, 命中率, 累计已省, 最省流量的站点, 判定分布, 接入的客户端;
+- **抓包**: 按 host / 状态 / 关键字 / 客户端 / 类型 / 入口 / 时间过滤 (条件写进地址栏, 可分享), 实时尾随,
+  时序密度条, 详情 (概览 / 请求头 / 响应头 / 请求体 / 原始 JSON), 复制为 curl / fetch, 一键导出 HAR;
+- **缓存**: 条目搜索与排序, 正文预览, 单条删除, 清理过期;
+- **主机与 TLS**: 每个 host 的连接数, 客户端, 缓存规模, 已省字节, 一键切换 隧道 / 解密 / 永不解密;
+- **接入**: 入口列表, Chrome / Firefox / Playwright / Puppeteer / curl / 环境变量 / PAC / 系统代理配置片段, CA 下载与信任步骤, Agent 的 API 与 MCP。
 
-**技术选型: 单文件原生 JS, 不引 npm 构建链。** 理由:
-
-- hxcp 是 Python + uv 项目, `api.py` 已在跑; 引入构建链会把"能跑起来"变成"先 install 再 build 再托管产物";
-- 本仓既有前端约定 (rotator / gh-registrar) 是 Vite + React, 但那些都有独立进程与 node 工具链, hxcp 没有;
-- 需要的交互只有"过滤 + 选中 + 展开", 原生 DOM 足够, 且没有构建产物与实际源码不一致的风险。
-
-**经 HX-Webx 子路径访问可用**: `http://localhost:36000/proxy/hxcp/`。页面里的 `basePrefix()`
-从 `location.pathname` 抽出 `/proxy/hxcp`, 所有 fetch 都带上它 (直连 8898 时前缀为空, 行为一致)。
-这是本仓既有约定, 见 `.agents/notes/implemented/bug-fix/2026-09-18-rotator-webx-subpath.md`。
+**技术选型仍是原生 JS, 不引 npm 构建链**: 理由同前 (hxcp 是 uv 项目, 交互只有过滤 / 选中 / 切换)。
+拆成多个文件只是为了遵守单文件 500 行。
 
 ## 未做
 
@@ -233,3 +268,6 @@ curl -s "localhost:8898/flow/body?sha256=SHA256&limit=131072"
 - 种子缓存的自动化刷新 (需手动 `export-seed`);
 - 取证档**只覆盖请求体** (post_data)。响应体不进池 —— 缓存的 blob 已按内容寻址存着,
   但被 policy 拒缓存的那类响应 (Set-Cookie / `no-store`) 目前只能看 8K 摘要。
+- 浏览器包启动非 Chromium 内核时, 自动把浏览器代理指向 hxcp 入口并把原上游挪成该入口的 `--client` 上游 (现在需手动配);
+- 隧道连接的字节计量 (mitmproxy 对忽略的连接不出 flow, 现在只记连接与 ALPN);
+- SOCKS5 入口不能叠上游出口 (mitmproxy 的限制), 需要上游时用 HTTP 入口。

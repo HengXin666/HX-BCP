@@ -73,6 +73,15 @@ class HxcpLinkTest(unittest.TestCase):
             a[a.index("--cache-dir") + 1], b[b.index("--cache-dir") + 1]
         )
 
+    def test_envs_share_one_store_and_tag_client(self):
+        link = self.link
+        with mock.patch.object(link.shutil, "which", return_value="/usr/bin/hxcp"):
+            a = link._hxcp_cmd("http://127.0.0.1:1", Path("/data/hxcp/env_a"))
+            b = link._hxcp_cmd("http://127.0.0.1:1", Path("/data/hxcp/env_b"))
+        self.assertEqual(a[a.index("--store-dir") + 1], b[b.index("--store-dir") + 1])
+        self.assertLess(a.index("--store-dir"), a.index("run"))
+        self.assertEqual(a[a.index("--client") + 1], "env_a")
+
     def test_uv_fallback_also_puts_cache_dir_before_run(self):
         link = self.link
         with mock.patch.object(link.shutil, "which", return_value=None):

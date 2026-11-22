@@ -4,11 +4,11 @@
 
 ## 这是什么
 
-hxcp。
+hxcp: 多浏览器共用的静态缓存代理. 两个入口 (代理档 proxy.py, CDP 档 engine.py) 写同一个 store.
 
 ## 从哪开始
 
-- 入口: `cli.py`
+- 入口: `cli.py` (子命令 run / launch / proxy / cache), `api.py` (控制台与 HTTP), `mcp_server.py`
 
 ## 内容划分
 
@@ -16,7 +16,8 @@ hxcp。
 
 ## 约定与坑
 
-- (待补: 这个目录的已知限制、易错点、为什么这么组织)
+- 代理档默认隧道, 只有 proxy-rules.json 列出的 host 才解密, 解密会改上游看到的 TLS 握手.
+- 多个进程共用一个缓存目录: store 用 WAL, flow 用 O_APPEND 单次 write, 运行态每实例一个文件.
 
 ---
 

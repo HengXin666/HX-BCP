@@ -34,7 +34,7 @@ _RUNNING: dict[str, _Mount] = {}
 
 
 def _cache_path(env_id: str) -> Path:
-    if not env_id or env_id in (".", "..") or any(c in env_id for c in "/\\\x00"):
+    if not env_id or env_id in (".", "..", "_shared") or any(c in env_id for c in "/\\\x00"):
         raise ValueError("非法 env_id")
     root = (Path(settings_manager.load().data_dir) / "hxcp").resolve()
     return root / env_id
@@ -55,9 +55,15 @@ def prepare_cache_dir(env_id: str) -> Path:
     return path
 
 
+def shared_store_dir() -> Path:
+    """One cache store for every env, so envs reuse each other's static assets."""
+    return (Path(settings_manager.load().data_dir) / "hxcp" / "_shared").resolve()
+
+
 def _hxcp_cmd(endpoint: str, cache_dir: Path) -> list[str]:
     cache = str(cache_dir)
-    tail = ["--cache-dir", cache, "run", "--endpoint", endpoint, "--duration", "0"]
+    tail = ["--cache-dir", cache, "--store-dir", str(shared_store_dir()),
+            "run", "--endpoint", endpoint, "--duration", "0", "--client", cache_dir.name]
     hxcp = shutil.which("hxcp")
     if hxcp:
         return [hxcp, *tail]

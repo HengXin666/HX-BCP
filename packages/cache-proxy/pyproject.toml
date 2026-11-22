@@ -10,6 +10,7 @@ dependencies = [
 [project.optional-dependencies]
 api = ["fastapi>=0.110", "uvicorn>=0.27"]
 mcp = ["mcp>=2.0"]
+proxy = ["mitmproxy>=12; python_version >= '3.12'"]
 
 # 开发依赖放 **dependency-group** 而不是 optional-extra:
 # uv 是精确同步, `uv sync --extra api` 会把没被指定的 optional-extra 卸掉 ——

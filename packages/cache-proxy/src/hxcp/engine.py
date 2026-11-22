@@ -26,17 +26,16 @@ flow 记录 (2026-09-19 新增, flows.py):
 """
 from __future__ import annotations
 
-import json
 import os
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from . import policy
+from . import policy, runtime
 from .cdp import Session
 from .flows import FlowLog, ForensicStore, forensic_path
-from .store import Store, Entry
+from .store import Store
 
 
 @dataclass
@@ -75,8 +74,10 @@ class Engine:
                  forensic: bool = False,
                  forensic_dir: str | None = None,
                  forensic_max_bytes: int = 0,
-                 forensic_free_bytes: int = 0) -> None:
+                 forensic_free_bytes: int = 0,
+                 client: str = "cdp") -> None:
         self.s = session
+        self.client = client or "cdp"
         self.store = store
         self.rules = rules or policy.Rules()
         self.stats = Stats()
@@ -137,20 +138,14 @@ class Engine:
         落盘是这个约束下最简单的正解 —— 且任何进程都能读, 包括 `hxcp cache` 与 MCP。
         失败不致命 (磁盘只读/权限), 所以吞异常。
         """
-        try:
-            root = getattr(self.store, "root", None)
-            if root is None:
-                return
-            payload = {"state": state, "updated_at": time.time(),
-                       "pid": __import__("os").getpid(), "stats": self.stats.to_dict(),
-                       "flows": self._flow_stats()}
-            p = os.path.join(str(root), "runtime.json")
-            tmp = p + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False)
-            os.replace(tmp, p)
-        except Exception:
-            pass
+        root = getattr(self.store, "root", None)
+        if root is None:
+            return
+        runtime.publish(root, "cdp-" + runtime.safe_name(self.client) + "-" + str(os.getpid())
+                        + "-" + str(id(self) % 100000),
+                        {"state": state, "updated_at": time.time(), "kind": "cdp",
+                         "client": self.client, "stats": self.stats.to_dict(),
+                         "flows": self._flow_stats()})
 
     def tick(self) -> None:
         """由宿主周期调用 (或每次命中后), 刷新运行态。"""
@@ -233,7 +228,7 @@ class Engine:
         self.stats.paused += 1
         self._note_request(url, req, method, p)
 
-        if method != "GET" or not self.rules.may_handle(url):
+        if policy.request_cacheable(method, req.get("headers") or {}) or not self.rules.may_handle(url):
             self.stats.passed += 1
             self.s.continue_request(rid)
             self._publish_throttled()
@@ -360,6 +355,7 @@ class Engine:
                "resource_type": rq.get("resource_type") or "",
                "req_headers": rq.get("req_headers") or {},
                "resp_headers": dict(headers or {}),
+               "client": self.client, "via": "cdp",
                "at": time.time()}
         if rq.get("post_data"):
             rec["post_data"] = rq["post_data"]

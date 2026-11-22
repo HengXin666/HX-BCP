@@ -11,9 +11,7 @@
 from __future__ import annotations
 
 import base64
-import json
 import os
-import threading
 import time
 from typing import Any
 
@@ -27,7 +25,7 @@ except ImportError:  # pragma: no cover
 
 from .store import Store, SCHEMA_VERSION
 from . import flows as flows_mod
-from . import policy
+from . import runtime
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 
@@ -37,27 +35,14 @@ MAX_EVENTS = 2000
 
 
 def read_runtime(store: Store) -> dict | None:
-    """读引擎落盘的运行态 (跨进程观测的唯一来源)。
-
-    引擎与 API 不在同一进程, 所以"引擎在不在跑"必须从磁盘读, 不能从内存变量读 ——
-    后者恒为 None, 会让面板上的观测面永远是空的。
-    """
-    try:
-        p = os.path.join(str(store.root), "runtime.json")
-        with open(p, encoding="utf-8") as f:
-            d = json.load(f)
-        # 太旧视为已停 (引擎崩溃/强杀时不会走 stop(), 落盘文件会滞留)
-        if time.time() - float(d.get("updated_at", 0)) > 120:
-            d["state"] = "stale"
-        return d
-    except Exception:
-        return None
+    """Aggregated state of every engine and proxy sharing this store (see runtime.py)."""
+    return runtime.aggregate(store.root)
 
 
 def build_app(store: Store, token: str = "") -> "FastAPI":
     if FastAPI is None:
         raise RuntimeError("需要 API 依赖: uv sync --extra api")
-    app = FastAPI(title="HX-Capture-Proxy", version="0.1.0")
+    app = FastAPI(title="HX-Capture-Proxy", version="0.3.0")
 
     def gate(req: Request) -> None:
         if not token:
@@ -104,20 +89,14 @@ def build_app(store: Store, token: str = "") -> "FastAPI":
             fl["forensic"] = flows_mod.open_forensic(store.root).stats()
         return {"engine": live, "engine_state": (rt or {}).get("state", "absent"),
                 "store": store.stats(), "flows": fl,
+                "instances": (rt or {}).get("instances", 0), "running": (rt or {}).get("running", 0),
                 "events": len(STATE["events"])}
 
     @app.get("/entries")
-    def entries(req: Request, limit: int = 100, q: str = "") -> dict:
+    def entries(req: Request, limit: int = 100, q: str = "", order: str = "hits") -> dict:
         gate(req)
-        sql = "SELECT url,method,status,size,hit_count,source,stored_at,fresh_until,etag FROM entries"
-        args: list = []
-        if q:
-            sql += " WHERE url LIKE ?"
-            args.append("%" + q + "%")
-        sql += " ORDER BY hit_count DESC, size DESC LIMIT ?"
-        args.append(int(limit))
-        rows = store._conn.execute(sql, args).fetchall()
-        return {"count": len(rows), "entries": [dict(r) for r in rows]}
+        rows = store.query(q=q, limit=limit, order=order)
+        return {"count": len(rows), "entries": rows}
 
     @app.get("/lookup")
     def lookup(req: Request, url: str) -> dict:
@@ -143,7 +122,8 @@ def build_app(store: Store, token: str = "") -> "FastAPI":
 
     @app.get("/flows")
     def flows(req: Request, limit: int = 200, host: str = "", status: int = 0,
-              q: str = "", kind: str = "", days: float = 0, offset: int = 0) -> dict:
+              q: str = "", kind: str = "", days: float = 0, offset: int = 0,
+              client: str = "", via: str = "", since: float = 0) -> dict:
         """查请求级 flow 历史 (请求头/响应头/时序/判定)。
 
         与 /entries 的区别: entries 是**缓存索引** (只含被缓存成功的静态资源),
@@ -154,7 +134,8 @@ def build_app(store: Store, token: str = "") -> "FastAPI":
         it = flows_mod.iter_flows(
             store.root / "flows", days=(days or None), host=host,
             status=(int(status) if status else None), q=q, kind=kind,
-            limit=max(1, min(int(limit), 5000)), offset=max(0, int(offset)))
+            limit=max(1, min(int(limit), 5000)), offset=max(0, int(offset)),
+            client=client, via=via, since=float(since or 0))
         rows = list(it)
         # count = 本页条数 (与 /entries 同形); 前端要用它判"还有没有下一页"。
         return {"count": len(rows), "flows": rows, "offset": max(0, int(offset))}
@@ -200,6 +181,9 @@ def build_app(store: Store, token: str = "") -> "FastAPI":
         if eng:
             eng.stop()
         return {"stopped": bool(eng)}
+
+    from .api_access import build_router
+    app.include_router(build_router(store, gate))
 
     # ── 静态前端 ──────────────────────────────────────────
     # 挂载在最后: / 是个 catch-all, 先注册它会把上面的路由全吞掉。
