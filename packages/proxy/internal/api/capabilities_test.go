@@ -271,6 +271,8 @@ var optionalAdminRoutes = []string{
 	"/api/v1/settings", "/api/v1/routing-rules", "/api/v1/routing-rules/apply",
 	"/api/v1/mcp",
 	"/api/v1/docker-access",
+	"/api/v1/entry", "/api/v1/entry/nodes", "/api/v1/entry/tenants", "/api/v1/entry/tenants/",
+	"/api/v1/entry/slots",
 }
 
 // observedOnlyRoutes are registered management routes the catalog deliberately

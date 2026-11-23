@@ -1215,6 +1215,43 @@ DELETE FROM subscription_nodes
 WHERE snapshot_id IN (SELECT id FROM subscription_snapshots WHERE status <> 'active');
 `,
 	},
+	{
+		version: 43,
+		name:    "unified_entry",
+		// Tenants of the unified entry and the measured exit of each node.
+		// See .agents/notes/implemented/architecture/2026-11-23-proxy-unified-entry.md.
+		sql: `
+CREATE TABLE entry_tenants (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    secret_sealed BLOB NOT NULL,
+    pools TEXT NOT NULL,
+    resi_quota_bytes INTEGER NOT NULL DEFAULT 0,
+    resi_used_bytes INTEGER NOT NULL DEFAULT 0,
+    total_bytes INTEGER NOT NULL DEFAULT 0,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    note TEXT NOT NULL DEFAULT '',
+    version INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+) STRICT;
+
+CREATE TABLE node_exit_profiles (
+    node_id TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+    exit_ip TEXT NOT NULL DEFAULT '',
+    country_code TEXT NOT NULL DEFAULT '',
+    city TEXT NOT NULL DEFAULT '',
+    asn INTEGER NOT NULL DEFAULT 0,
+    as_name TEXT NOT NULL DEFAULT '',
+    residential INTEGER NOT NULL DEFAULT 0,
+    mobile INTEGER NOT NULL DEFAULT 0,
+    hosting INTEGER NOT NULL DEFAULT 0,
+    success INTEGER NOT NULL DEFAULT 0,
+    error TEXT NOT NULL DEFAULT '',
+    sampled_at TEXT NOT NULL
+) STRICT;
+`,
+	},
 }
 
 func (s *Store) migrate(ctx context.Context) error {

@@ -59,7 +59,7 @@ var presets = []Preset{
 		Protocol:          "http",
 		GatewayHost:       "proxy.bestproxy.com",
 		GatewayPort:       2312,
-		UsernameTemplate:  "{user}_area-{region}_life-{ttl|min}_session-{session}",
+		UsernameTemplate:  "{user}_area-{region}_life-{ttl}_session-{session}",
 		RotationMode:      RotationSessionTemplate,
 		SessionTTLSeconds: 60,
 		PoolSize:          8,
@@ -67,8 +67,8 @@ var presets = []Preset{
 		DocURL:            "https://bestproxy.com",
 		Notes: "BestProxy 动态住宅粘性账号语法（已在 hx-auto-outlook 中验证）：" +
 			"`账号_area-国家_life-分钟_session-会话ID`。网关为 proxy.bestproxy.com:2312；" +
-			"国家代码请填大写（如 US），系统会原样保留；life 单位为分钟, 模板用 {ttl|min} 把 " +
-			"session_ttl_seconds 向上取整换算成分钟；客户端建立逻辑会话时系统才生成供应商会话 ID，" +
+			"国家代码请填大写（如 US），系统会原样保留；life 单位为分钟，" +
+			"session_ttl_seconds 建议填 30-90；客户端建立逻辑会话时系统才生成供应商会话 ID，" +
 			"不同客户端会话获得独立出口 IP。保存后用「测试连接」确认出口 IP。",
 	},
 	{
@@ -77,7 +77,7 @@ var presets = []Preset{
 		Protocol:          "http",
 		GatewayHost:       "us.rapidproxy.io",
 		GatewayPort:       5001,
-		UsernameTemplate:  "{user}-residential-{region}-session-{session}-stime-{ttl|min}",
+		UsernameTemplate:  "{user}-residential-{region}-session-{session}-stime-{ttl}",
 		RotationMode:      RotationSessionTemplate,
 		SessionTTLSeconds: 60,
 		PoolSize:          8,
@@ -85,7 +85,7 @@ var presets = []Preset{
 		DocURL:            "https://www.rapidproxy.io",
 		Notes: "RapidProxy 动态住宅粘性账号语法（已在 hx-auto-outlook 工作凭据中验证）：" +
 			"`账号-residential-国家-session-会话ID-stime-分钟`。网关默认 us.rapidproxy.io:5001；" +
-			"国家/地区代码原样保留（如 US、GLOBAL）；stime 单位为分钟, 模板用 {ttl|min} 换算，官方粘性范围 1-180，" +
+			"国家/地区代码原样保留（如 US、GLOBAL）；stime 单位为分钟，官方粘性范围 1-180，" +
 			"session_ttl_seconds 建议填 60-600；客户端建立逻辑会话时系统才生成会话 ID，" +
 			"不同客户端会话获得独立出口 IP。保存后用「测试连接」确认出口 IP。",
 	},

@@ -293,3 +293,57 @@ func RegionAliases(region string) []string {
 		return []string{strings.ToLower(strings.TrimSpace(region))}
 	}
 }
+
+// RegionFromName returns the ISO country code a node display name names, or ""
+// when it names none of the known regions. A flag emoji wins; Latin aliases
+// must stand as their own word, so "Australia" is not "us".
+func RegionFromName(name string) string {
+	if code := flagCountry(name); code != "" {
+		return code
+	}
+	name = strings.ToLower(name)
+	for _, region := range knownRegions {
+		for _, alias := range RegionAliases(region) {
+			if containsWord(name, alias) {
+				return strings.ToUpper(region)
+			}
+		}
+	}
+	return ""
+}
+
+// flagCountry reads the first regional-indicator flag in a name.
+func flagCountry(name string) string {
+	runes := []rune(name)
+	for index := 0; index+1 < len(runes); index++ {
+		first, second := runes[index], runes[index+1]
+		if first >= 0x1F1E6 && first <= 0x1F1FF && second >= 0x1F1E6 && second <= 0x1F1FF {
+			return string([]rune{'A' + first - 0x1F1E6, 'A' + second - 0x1F1E6})
+		}
+	}
+	return ""
+}
+
+// containsWord finds alias in name; an ASCII alias must not touch other ASCII
+// letters, a CJK alias may sit anywhere.
+func containsWord(name, alias string) bool {
+	if alias == "" {
+		return false
+	}
+	for start := 0; ; {
+		offset := strings.Index(name[start:], alias)
+		if offset < 0 {
+			return false
+		}
+		begin := start + offset
+		end := begin + len(alias)
+		if !asciiLetter(alias[0]) || ((begin == 0 || !asciiLetter(name[begin-1])) && (end == len(name) || !asciiLetter(name[end]))) {
+			return true
+		}
+		start = begin + 1
+	}
+}
+
+func asciiLetter(value byte) bool {
+	return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z')
+}

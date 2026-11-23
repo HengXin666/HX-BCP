@@ -194,7 +194,9 @@ func TestPackageReleaseBundleContract(t *testing.T) {
 // 见 .agents/notes/implemented/architecture/2026-10-13-upgrade-adopts-pre-rename-installation.md
 func TestReleaseWorkflowPublishesRenamedBundle(t *testing.T) {
 	t.Parallel()
-	content, err := os.ReadFile(".github/workflows/release.yml")
+	// The package lives in HX-BCP as packages/proxy, its release workflow sits
+	// at the repository root because GitHub only runs top-level workflows.
+	content, err := os.ReadFile("../../.github/workflows/proxy-release.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +204,8 @@ func TestReleaseWorkflowPublishesRenamedBundle(t *testing.T) {
 	for _, expected := range []string{
 		"./cmd/hx-pxyd",
 		"build/hx-pxyd-${GOARCH}",
-		"release/hx-pxy_${{ github.ref_name }}_linux_${{ matrix.arch }}.tar.gz",
+		"release/hx-pxy_${{ steps.version.outputs.value }}_linux_${{ matrix.arch }}.tar.gz",
+		"GITHUB_REF_NAME#proxy-",
 		"sha256sum hx-pxy_*.tar.gz",
 	} {
 		if !strings.Contains(workflow, expected) {

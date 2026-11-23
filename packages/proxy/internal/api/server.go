@@ -362,6 +362,7 @@ type Server struct {
 	edgeSlots         chan struct{}
 	quickstart        QuickstartService
 	dockerAccess      DockerAccessService
+	entry             EntryService
 }
 
 type errorResponse struct {
@@ -444,6 +445,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("/api/v1/exports/", func(writer http.ResponseWriter, request *http.Request) {
 		s.handleItem(writer, request, artifact.KindExport, "/api/v1/exports/")
 	})
+	s.registerEntryRoutes(mux)
 	if s.subscriptions != nil {
 		mux.HandleFunc("/api/v1/subscriptions", s.handleSubscriptions)
 		mux.HandleFunc("/api/v1/subscriptions/", s.handleSubscription)
@@ -864,7 +866,8 @@ func (s *Server) requestContext(next http.Handler) http.Handler {
 		next.ServeHTTP(writer, request.WithContext(ctx))
 		loggedPath := request.URL.Path
 		if strings.HasPrefix(loggedPath, "/sub/") || strings.HasPrefix(loggedPath, "/rot/") ||
-			strings.HasPrefix(loggedPath, "/ctl/") || strings.HasPrefix(loggedPath, listener.ConsumerNodesPath) {
+			strings.HasPrefix(loggedPath, "/ctl/") || strings.HasPrefix(loggedPath, listener.ConsumerNodesPath) ||
+			strings.HasPrefix(loggedPath, EntrySubscriptionPrefix) {
 			// Every token-addressed route carries a credential in the path; the
 			// namespace is logged and the secret never is.
 			loggedPath = "/" + strings.SplitN(strings.TrimPrefix(loggedPath, "/"), "/", 2)[0] + "/[redacted]"

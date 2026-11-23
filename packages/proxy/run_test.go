@@ -711,7 +711,12 @@ func TestRunScriptDoesNotRegisterSystemServices(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(run.sh) error = %v", err)
 	}
-	script := string(content)
+	// The frontend half of run.sh lives in a sourced library.
+	frontend, err := os.ReadFile("scripts/lib/frontend.sh")
+	if err != nil {
+		t.Fatalf("ReadFile(scripts/lib/frontend.sh) error = %v", err)
+	}
+	script := string(content) + "\n" + string(frontend)
 	for _, forbidden := range []string{
 		"systemctl ",
 		"useradd ",

@@ -30,6 +30,21 @@
 TUN 默认关闭，启用权限、Docker 诊断/修复与 30 天日志保留见 [网络运维说明](docs/NETWORK_OPERATIONS.md)。
 生产 systemd 安装要求 >=245；不会自动接管其他 TUN 或清空宿主防火墙。
 
+## 统一入口 (推荐的接入方式)
+
+设置 `HX_PXY_ENTRY_LISTEN` (如 `0.0.0.0:7880`) 后, 一个端口同时讲 HTTP 代理与 SOCKS5, 用户名选出口, 接入方只需要会配代理用户名:
+
+```text
+socks5://租户-pool-resi-cc-us-session-任务名-ttl-30:密码@127.0.0.1:7880
+```
+
+- `pool`: `resi` 真住宅 / `subresi` 订阅里的住宅节点 / `sub` 订阅节点 / `direct` 本机; 或 `group-代理组名` (需授权)
+- `session`: 稳定槽位, 上游刷新删节点时自动换到同条件节点, 槽位名不变; 不带则每连接轮换
+- 住宅平台只需一条用户名模板 (如 `{user}-cc-{country|lower}-sid-{session}-t-{ttl|min}`), 不写代码
+- 人用: 控制台「统一入口」页复制 Clash 订阅, 节点名永远稳定
+
+完整说明见 HX-BCP 仓库 `docs/architecture/proxy-entry.md`。
+
 ## 为什么使用 HX-Pxy
 
 普通订阅客户端适合在单台终端上选节点；HX-Pxy 面向长期运行的服务器场景，把“订阅输入”转化为可恢复、可解释、可组合的 Desired State：

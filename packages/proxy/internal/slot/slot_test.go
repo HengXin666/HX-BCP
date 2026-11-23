@@ -11,15 +11,16 @@ type fakeCatalog struct {
 	order []string
 }
 
-func (c *fakeCatalog) Lookup(id string) (Node, bool) {
+func (c *fakeCatalog) Lookup(id string, _ Request) (Node, bool) {
 	node, ok := c.nodes[id]
 	return node, ok
 }
 
-func (c *fakeCatalog) Pick(request Request, exclude map[string]bool) (Node, error) {
+func (c *fakeCatalog) Pick(request Request, lost Binding) (Node, error) {
+	previous := lost.NodeID
 	for _, id := range c.order {
 		node, ok := c.nodes[id]
-		if !ok || !node.Alive || exclude[id] || node.Pool != request.Pool {
+		if !ok || !node.Alive || id == previous || node.Pool != request.Pool {
 			continue
 		}
 		if request.Country != "" && node.Country != request.Country {
@@ -119,5 +120,32 @@ func TestSweepAndRelease(t *testing.T) {
 	*now = now.Add(11 * time.Minute)
 	if removed := table.Sweep(); removed != 1 {
 		t.Fatalf("Sweep() = %d, want 1", removed)
+	}
+}
+
+func TestResolveEndsBindingAtMaxAge(t *testing.T) {
+	catalog, table, now := newFixture()
+	request := Request{Tenant: "t", Slot: "s", Pool: "sub", TTL: time.Hour, MaxAge: 10 * time.Minute, OnLoss: Rebind}
+	first, err := table.Resolve(catalog, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	*now = now.Add(11 * time.Minute)
+	second, err := table.Resolve(catalog, request)
+	if err != nil || !second.BoundAt.After(first.BoundAt) {
+		t.Fatalf("binding outlived MaxAge: %+v %v", second, err)
+	}
+}
+
+func TestResolveRebindsWhenConstraintsChange(t *testing.T) {
+	catalog, table, _ := newFixture()
+	request := Request{Tenant: "t", Slot: "s", Pool: "sub", Country: "US", TTL: time.Hour, OnLoss: Rebind}
+	if _, err := table.Resolve(catalog, request); err != nil {
+		t.Fatal(err)
+	}
+	request.Country = "JP"
+	binding, err := table.Resolve(catalog, request)
+	if err != nil || binding.NodeID != "c" {
+		t.Fatalf("changed country kept the old node: %+v %v", binding, err)
 	}
 }

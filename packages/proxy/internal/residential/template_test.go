@@ -178,7 +178,7 @@ func TestBestProxyPresetRendersVerifiedGatewaySyntax(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render() error = %v", err)
 	}
-	const want = "acct123_area-US_life-1_session-stable1234"
+	const want = "acct123_area-US_life-60_session-stable1234"
 	if rendered != want {
 		t.Fatalf("Render() = %q, want %q", rendered, want)
 	}
@@ -218,7 +218,7 @@ func TestRapidProxyPresetRendersGatewaySyntax(t *testing.T) {
 		User:    "hxloli666",
 		Region:  "GLOBAL",
 		Session: "42441522",
-		TTL:     "600",
+		TTL:     "10",
 	})
 	if err != nil {
 		t.Fatalf("Render() error = %v", err)
@@ -242,7 +242,7 @@ func TestRapidProxyPresetRendersCountryCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render() error = %v", err)
 	}
-	const want = "acct123-residential-US-session-stable12345-stime-1"
+	const want = "acct123-residential-US-session-stable12345-stime-60"
 	if rendered != want {
 		t.Fatalf("Render() = %q, want %q", rendered, want)
 	}

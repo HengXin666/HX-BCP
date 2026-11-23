@@ -50,6 +50,7 @@ type process struct {
 }
 
 type Manager struct {
+	entrySink        func(EntryCatalog)
 	compiler         *Compiler
 	binary           string
 	runtimeDir       string
@@ -158,6 +159,16 @@ func WithLogRotation(maxBytes int64, backups int) ManagerOption {
 	}
 }
 
+// WithEntryHub compiles the unified entry hub listener into every document and
+// hands each applied catalog to sink.
+func WithEntryHub(hub EntryHub, sink func(EntryCatalog)) ManagerOption {
+	return func(manager *Manager) error {
+		manager.compiler.SetEntryHub(hub)
+		manager.entrySink = sink
+		return nil
+	}
+}
+
 func WithExternalProcess(enabled bool) ManagerOption {
 	return func(manager *Manager) error {
 		manager.externalProcess = enabled
@@ -237,9 +248,17 @@ func (m *Manager) Apply(ctx context.Context) error {
 		return err
 	}
 	if err := m.applyCompiledLocked(ctx, compiled); err != nil {
-		return err
+		if compiled.Entry.HubAddress == "" {
+			return err
+		}
+		if compiled, err = m.applyWithoutEntryHubLocked(ctx, err); err != nil {
+			return err
+		}
 	}
 	m.withheld.set(compiled.WithheldEntries)
+	if m.entrySink != nil {
+		m.entrySink(compiled.Entry)
+	}
 	m.logWithheldEntries(compiled.WithheldEntries)
 	// Only a configuration Mihomo actually accepted becomes the previous
 	// membership the Retain stage keeps. A failed record never undoes the

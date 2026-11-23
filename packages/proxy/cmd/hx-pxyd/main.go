@@ -25,6 +25,7 @@ import (
 	"github.com/HengXin666/hx-pxy/internal/config"
 	"github.com/HengXin666/hx-pxy/internal/dataplane/mihomo"
 	"github.com/HengXin666/hx-pxy/internal/dockeraccess"
+	"github.com/HengXin666/hx-pxy/internal/entry"
 	"github.com/HengXin666/hx-pxy/internal/fleet"
 	"github.com/HengXin666/hx-pxy/internal/instance"
 	"github.com/HengXin666/hx-pxy/internal/listener"
@@ -157,15 +158,29 @@ func run(logger *slog.Logger) error {
 	} else if egressInterface != "" {
 		logger.Info("Mihomo outbound traffic isolated from host TUN routing", "interface", egressInterface)
 	}
+	// The unified entry dials the data plane through one loopback hub listener.
+	// See .agents/notes/implemented/architecture/2026-11-23-proxy-unified-entry.md.
+	entryCatalogs := &entryCatalogBox{}
+	managerOptions := []mihomo.ManagerOption{
+		mihomo.WithEgressInterface(egressInterface),
+		mihomo.WithProcessMaxProcs(cfg.MihomoMaxProcs),
+		mihomo.WithLogRotation(cfg.MihomoLogMaxBytes, cfg.MihomoLogBackups),
+		mihomo.WithExternalProcess(cfg.MihomoExternal),
+	}
+	if strings.TrimSpace(cfg.EntryListen) != "" {
+		if hubSecret, err := loadEntryHubSecret(startupContext, database); err != nil {
+			logger.Error("entry hub secret unavailable; unified entry disabled", "component", "entry", "error", err)
+			cfg.EntryListen = ""
+		} else {
+			managerOptions = append(managerOptions, mihomo.WithEntryHub(mihomo.EntryHub{Port: cfg.EntryHubPort, Secret: hubSecret}, entryCatalogs.sink))
+		}
+	}
 	mihomoManager, err := mihomo.NewManager(
 		mihomoCompiler,
 		cfg.MihomoBinary,
 		cfg.RuntimeConfigPath,
 		logger,
-		mihomo.WithEgressInterface(egressInterface),
-		mihomo.WithProcessMaxProcs(cfg.MihomoMaxProcs),
-		mihomo.WithLogRotation(cfg.MihomoLogMaxBytes, cfg.MihomoLogBackups),
-		mihomo.WithExternalProcess(cfg.MihomoExternal),
+		managerOptions...,
 	)
 	if err != nil {
 		return err
@@ -316,6 +331,13 @@ func run(logger *slog.Logger) error {
 	} else if minted > 0 {
 		logger.Info("minted credentials for shared-inbound members", "component", "listener", "count", minted)
 	}
+	var entryService *entry.Service
+	if strings.TrimSpace(cfg.EntryListen) != "" {
+		entryService = startEntryService(startupContext, cfg, egressInterface, database, secretBox, residentialService, logger)
+		if entryService != nil {
+			entryCatalogs.attach(entryService.OnCatalog)
+		}
+	}
 	if err := mihomoManager.Apply(startupContext); err != nil {
 		logger.Error("initial Mihomo apply failed; management API remains available", "error", err)
 	}
@@ -452,6 +474,7 @@ func run(logger *slog.Logger) error {
 		api.WithDockerAccess(dockerAccessService),
 		api.WithQuickstart(quickstartService),
 		api.WithResidential(residentialService),
+		entryAPIOption(entryService),
 		api.WithFleet(fleetService),
 		api.WithTraffic(trafficService),
 		api.WithSettings(settingsService),
@@ -528,6 +551,9 @@ func run(logger *slog.Logger) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	if entryService != nil {
+		entryService.Start(ctx)
+	}
 
 	serverErrors := make(chan error, 1)
 	go func() {

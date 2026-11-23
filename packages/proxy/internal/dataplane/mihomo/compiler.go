@@ -57,6 +57,9 @@ type Compiled struct {
 	// listeners pinned to a node the document no longer carries (see
 	// compiler_pinned.go).
 	WithheldEntries []WithheldEntry
+	// Entry is what this document offers the unified entry, empty when the
+	// entry hub is off.
+	Entry EntryCatalog
 }
 
 type Compiler struct {
@@ -70,6 +73,8 @@ type Compiler struct {
 	// pendingMembers is the membership of the last applied document when
 	// recording it failed; it overrides stored history until a write succeeds.
 	pendingMembers *pendingMembership
+	// entryHub is the loopback listener the unified entry dials into.
+	entryHub EntryHub
 }
 
 func NewCompiler(repository Repository, cipher Cipher) (*Compiler, error) {
@@ -91,6 +96,10 @@ func (c *Compiler) setEgressInterface(name string) {
 }
 
 func (c *Compiler) Compile(ctx context.Context) (Compiled, error) {
+	return c.compile(ctx, c.entryHub)
+}
+
+func (c *Compiler) compile(ctx context.Context, hub EntryHub) (Compiled, error) {
 	settings, err := systemsettings.Load(ctx, c.repository)
 	if err != nil {
 		return Compiled{}, fmt.Errorf("load global settings: %w", err)
@@ -321,6 +330,11 @@ func (c *Compiler) Compile(ctx context.Context) (Compiled, error) {
 			Port:        shared.record.Port,
 		})
 	}
+	hubConfig, hubRules, hubEndpoint, entryCatalog := c.compileEntryHub(hub, nodeRecords, nodeByID, enabledGroups, endpoints)
+	if hubConfig != nil {
+		listenerConfigs = append(listenerConfigs, hubConfig)
+		endpoints = append(endpoints, *hubEndpoint)
+	}
 	if err := validateNoListenerLoop(proxies, listenerConfigs); err != nil {
 		return Compiled{}, err
 	}
@@ -371,6 +385,9 @@ func (c *Compiler) Compile(ctx context.Context) (Compiled, error) {
 	// Not an inbound's proxy group. That group is a listener `proxy` field
 	// or an IN-NAME/IN-USER rule above.
 	// See .agents/notes/implemented/feature/2026-10-18-yaml-routing-intent.md
+	// The hub dispatch matches only the hub listener, so routing it first
+	// cannot change what any other listener matches.
+	compiledRules = hubRules.prepend(compiledRules)
 	compiledRules = append(compiledRules, "MATCH,DIRECT")
 	document := map[string]any{
 		"tun":       tun,
@@ -402,6 +419,7 @@ func (c *Compiler) Compile(ctx context.Context) (Compiled, error) {
 	if c.egressInterface != "" {
 		document["interface-name"] = c.egressInterface
 	}
+	hubRules.attach(document)
 	encoded, err := yaml.Marshal(document)
 	if err != nil {
 		return Compiled{}, fmt.Errorf("encode mihomo configuration: %w", err)
@@ -418,6 +436,7 @@ func (c *Compiler) Compile(ctx context.Context) (Compiled, error) {
 		ProxyCount:       len(proxies),
 		ControllerSocket: c.controllerSocket,
 		GroupMembers:     members.memberships(groupNameByID),
+		Entry:            entryCatalog,
 		WithheldEntries:  withheldEntries,
 	}, nil
 }

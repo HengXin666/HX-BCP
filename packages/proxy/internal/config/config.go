@@ -42,6 +42,17 @@ type Config struct {
 	// sole administrator; set HX_PXY_TERMINAL_HISTORY=0 to restore the
 	// no-history lockdown.
 	TerminalHistory bool
+	// EntryListen is the unified entry address, HTTP proxy and SOCKS5 on one
+	// port. Empty, the default, keeps the entry and its hub off.
+	EntryListen string
+	// EntryPublicAddress is the host:port clients reach the entry at, written
+	// into Clash profiles; empty uses the panel host and the entry port.
+	EntryPublicAddress string
+	// EntryHubPort is the loopback Mihomo listener the entry dials into.
+	EntryHubPort int
+	// EntryExitProbe measures each node exit to sort subscription nodes into
+	// the subresi pool. Off unless HX_PXY_ENTRY_EXIT_PROBE=1.
+	EntryExitProbe bool
 }
 
 func Default() Config {
@@ -68,6 +79,10 @@ func Default() Config {
 		TerminalShell:            envOrDefault("HX_PXY_TERMINAL_SHELL", ""),
 		TerminalPrivilegedSocket: envOrDefault("HX_PXY_TERMINAL_SOCKET", ""),
 		TerminalHistory:          envOrDefault("HX_PXY_TERMINAL_HISTORY", "1") != "0",
+		EntryListen:              envOrDefault("HX_PXY_ENTRY_LISTEN", ""),
+		EntryPublicAddress:       envOrDefault("HX_PXY_ENTRY_PUBLIC_ADDRESS", ""),
+		EntryHubPort:             envIntOrDefault("HX_PXY_ENTRY_HUB_PORT", 27890),
+		EntryExitProbe:           envOrDefault("HX_PXY_ENTRY_EXIT_PROBE", "0") == "1",
 	}
 }
 

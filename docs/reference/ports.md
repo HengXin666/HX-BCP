@@ -4,7 +4,9 @@
 |---|---|---|
 | 缓存代理 | 8898 | `python -m hxcp.api --port` |
 | 指纹浏览器 API | 8325 | `hxb serve --port` |
-| 统一出口代理 (packages/proxy) | 7890 | 控制台里的入口配置; 也可换成任意外部上游 |
+| 统一出口代理共享入口 (packages/proxy) | 7890 | 控制台里的入口配置; 也可换成任意外部上游 |
+| 统一出口代理用户名方言入口 | 关闭 (建议 7880) | `HX_PXY_ENTRY_LISTEN`, 见 docs/architecture/proxy-entry.md |
+| 统一出口代理内部 hub (仅环回) | 27890 | `HX_PXY_ENTRY_HUB_PORT` |
 | 控制台 dev server | 由 Vite 决定 | `pnpm dev --port` |
 
 ## 约定
