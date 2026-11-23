@@ -96,6 +96,12 @@ jobs:
               with:
                   go-version-file: packages/proxy/go.mod
                   cache-dependency-path: packages/proxy/go.sum
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 9
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
             - name: 下载固定版本数据面 (端到端测试要真 mihomo)
               env:
                   GH_TOKEN: ${{ github.token }}
