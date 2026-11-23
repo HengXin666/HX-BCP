@@ -1,0 +1,34 @@
+# Reference repositories
+/ref/easy-proxies/
+/ref/BPB-Worker-Panel/
+
+# Runtime state
+/.tmp/
+/data/
+/runtime/
+/backups/
+*.db
+*.db-shm
+*.db-wal
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+config.local.yaml
+
+# Go
+/bin/
+/coverage.out
+*.test
+
+# Frontend
+/web/node_modules/
+/web/dist/
+
+# Tooling
+.idea/
+.vscode/
+.DS_Store

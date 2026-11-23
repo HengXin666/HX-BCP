@@ -1,0 +1,53 @@
+{
+  "name": "hx-pxy-web",
+  "private": true,
+  "version": "0.1.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "test:e2e:inventory": "node e2e/inventory-layout.mjs",
+    "test:terminal-cwd": "node --experimental-strip-types --test e2e/terminal-cwd.test.ts",
+    "test:terminal-layout": "node e2e/terminal-layout.mjs",
+    "test:terminal-input": "node --experimental-strip-types --test e2e/terminal-input.test.ts",
+    "test:docker-scroll": "node e2e/docker-scroll-guard.mjs",
+    "check": "tsc -b --pretty false",
+    "test:residential-ui": "node e2e/residential-channel-layout.mjs",
+    "test:routing-layout": "node e2e/routing-create-dialog-layout.mjs",
+    "test:routing-shapes": "node e2e/routing-service-shapes.mjs",
+    "test:ui": "node e2e/ui-smoke.mjs",
+    "test:guard-settings": "node e2e/guard-settings.mjs",
+    "preview": "vite preview",
+    "test:delete-guard": "node e2e/delete-shared-group-guard.mjs",
+    "test:runtime": "node --experimental-strip-types --test e2e/query-cache.test.ts e2e/docker-endpoint.test.ts e2e/terminal-input.test.ts",
+    "test:network-routing": "node e2e/network-routing-regression.mjs"
+  },
+  "dependencies": {
+    "@radix-ui/react-checkbox": "^1.3.11",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-tabs": "^1.1.21",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.26.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwind-merge": "3.6.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "26.1.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.4",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "8.1.5"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

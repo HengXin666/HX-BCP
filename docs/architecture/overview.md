@@ -18,7 +18,7 @@
 |---|---|---|---|
 | packages/browser | 8325 | 环境创建 / 启动 / CDP 接入 / 指纹派生 | 缓存, 出口 |
 | packages/cache-proxy | 8898 | 静态资源缓存 (不终结 TLS) / 抓包 | 身份, 出口 |
-| 上游代理 | 7890 | 出口 IP 与线路 | 身份, 缓存 |
+| packages/proxy | 7890 | 出口 IP 与线路: 订阅 / 住宅 / 本机出口聚合成一个入口, 见 proxy-entry.md | 身份, 缓存 |
 | packages/fingerprint* | - | 指纹采集 / 判定 / 自检评分 | 会话生命周期 |
 | apps/console-web | - | 人机两通道的操作界面 | 业务逻辑 |
 

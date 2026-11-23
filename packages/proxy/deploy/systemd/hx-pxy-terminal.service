@@ -1,0 +1,32 @@
+[Unit]
+Description=HX-Pxy Privileged Terminal PTY Helper
+Documentation=https://github.com/HengXin666/hx-pxy
+After=local-fs.target
+Before=hx-pxy.service
+PartOf=hx-pxy.service
+
+[Service]
+Type=simple
+LogNamespace=hx-pxy
+User=root
+Group=root
+RuntimeDirectory=hx-pxy
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=no
+Environment=HOME=/root
+Environment=USER=root
+Environment=LOGNAME=root
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/local/lib/hx-pxy/current/hx-pxyd --terminal-helper --terminal-socket /run/hx-pxy/terminal.sock --terminal-socket-group hx-pxy --terminal-helper-user hx-pxy --updater /usr/local/sbin/hx-pxy-install
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=20s
+KillSignal=SIGTERM
+UMask=0077
+LimitNOFILE=1048576
+
+# This unit deliberately owns the only root shell path. The control plane
+# remains sandboxed and can reach it only through the local group-owned socket.
+
+[Install]
+WantedBy=multi-user.target

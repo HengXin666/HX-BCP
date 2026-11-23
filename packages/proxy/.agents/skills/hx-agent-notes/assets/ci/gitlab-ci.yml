@@ -1,0 +1,12 @@
+agent-notes:
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  allow_failure: true
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - python3 .agents/skills/hx-agent-notes/scripts/github/collect.py --skill .agents/skills/hx-agent-notes --diff --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA" --head "$CI_COMMIT_SHA"
+  artifacts:
+    when: always
+    paths: [agent-notes-report.json]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

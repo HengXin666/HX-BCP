@@ -20,13 +20,17 @@ upstream-proxy 共享入口 7890 的出口身份恰恰由用户名承载, 所以
 
     http://<identity>:<pass>@127.0.0.1:7890   标准形态 (共享入口 + 用户名分流)
     hxpxy://<identity>[:<pass>][@host:port]   简写, 省略地址时落到 HXPXY_DEFAULT_ENTRY
+    hxpxy://<tenant>:<pass>[@host:port]?pool=resi&cc=us&session=s1&ttl=30
+        查询参数按 packages/proxy 的入口用户名方言拼到用户名后:
+        tenant-pool-resi-cc-us-session-s1-ttl-30。键与语义见
+        docs/architecture/proxy-entry.md, 判据在 packages/proxy/internal/entry。
 """
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 HTTP, SOCKS5 = "http", "socks5"
 DIRECT = "direct"  # 仅 relay 内部: 沙箱副本经宿主直连出网
@@ -44,6 +48,8 @@ _SCHEME_ALIASES = {
     "upstream-proxy": HTTP,
 }
 _FORBIDDEN_HOST_CHARS = set("/\\@?# \t\r\n")
+# 入口用户名方言的键, 顺序即拼接顺序
+_DIALECT_KEYS = ("pool", "group", "cc", "city", "asn", "session", "ttl", "loss")
 
 
 class ProxyLinkError(ValueError):
@@ -96,6 +102,9 @@ def _parse_url(raw: str) -> dict:
         )
     is_hxpxy = scheme in ("hxpxy", "upstream-proxy")
     rest = raw.split("://", 1)[1]
+    query = ""
+    if is_hxpxy and "?" in rest:
+        rest, query = rest.split("?", 1)
     if is_hxpxy and "@" not in rest:
         rest = rest.rstrip("/") + "@" + HXPXY_DEFAULT_ENTRY
     parts = urlsplit("http://" + rest)
@@ -113,8 +122,29 @@ def _parse_url(raw: str) -> dict:
         "username": unquote(parts.username or ""),
         "password": unquote(parts.password or ""),
     }
+    if query:
+        cfg["username"] = _dialect_username(cfg["username"], query)
     validate_config(cfg)
     return cfg
+
+
+def _dialect_username(identity: str, query: str) -> str:
+    """hxpxy 查询参数 -> 入口用户名方言后缀。只做拼接与字符校验, 语义由入口判定。"""
+    pairs = dict(parse_qsl(query, keep_blank_values=False))
+    unknown = sorted(set(pairs) - set(_DIALECT_KEYS))
+    if unknown:
+        raise ProxyLinkError("hxpxy 不认识的参数: %s" % ", ".join(unknown))
+    if not identity:
+        raise ProxyLinkError("hxpxy 带参数时必须给租户名")
+    parts = [identity]
+    for key in _DIALECT_KEYS:
+        value = pairs.get(key, "").strip()
+        if not value:
+            continue
+        if not all(c.isascii() and (c.isalnum() or c == "_") for c in value):
+            raise ProxyLinkError("hxpxy 参数 %s 只能含字母, 数字和下划线" % key)
+        parts += [key, value]
+    return "-".join(parts)
 
 
 def _parse_colon_form(raw: str) -> dict:

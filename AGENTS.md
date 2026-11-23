@@ -16,6 +16,7 @@
 | packages/fingerprint/ | 指纹采集与判定 | 该目录 README |
 | packages/fingerprint-audit/ | 环境质量自检 (红/黄/绿), 可当流水线闸门 | KNOWN-ISSUES.md |
 | packages/fingerprint-insight/ | 指纹画像与对比 | 该目录 README |
+| packages/proxy/ | 统一出口代理 (Go), 订阅 / 住宅 / 本机出口聚合成一个入口 | docs/architecture/proxy-entry.md |
 | apps/console-web/ | 控制台, UI 只用 @hx/ui | 该目录 README |
 | docs/ | 架构 / 用法 / 参考 | docs/architecture/overview.md |
 

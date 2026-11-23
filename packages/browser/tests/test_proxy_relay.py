@@ -51,6 +51,14 @@ TARGET_BODY = b"hello-from-target"
             "hxpxy://ghreg-tw01:secret@10.0.0.5:7890",
             ("http", "10.0.0.5", 7890, "ghreg-tw01", "secret"),
         ),
+        (
+            "hxpxy://acme:secret?pool=resi&cc=us&session=job42&ttl=30",
+            ("http", "127.0.0.1", 7890, "acme-pool-resi-cc-us-session-job42-ttl-30", "secret"),
+        ),
+        (
+            "hxpxy://acme:secret@10.0.0.5:7891?ttl=5&session=a1&pool=sub",
+            ("http", "10.0.0.5", 7891, "acme-pool-sub-session-a1-ttl-5", "secret"),
+        ),
         ("[::1]:3128", ("http", "::1", 3128, "", "")),
     ],
 )

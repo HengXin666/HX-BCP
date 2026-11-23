@@ -20,6 +20,7 @@ packages/
   fingerprint/          指纹采集与判定
   fingerprint-audit/    环境质量自检: 出红/黄/绿, 可直接当流水线闸门
   fingerprint-insight/  指纹画像与对比
+  proxy/                统一出口代理 (Go, 由 hx-pxy 并入): 订阅 / 住宅 / 本机出口聚合成一个入口
 apps/
   console-web/          控制台 (React + @hx/ui)
 docs/                   架构 / 用法 / 参考
@@ -57,6 +58,7 @@ cd apps/console-web && pnpm install && pnpm dev
 | `packages/fingerprint` | hx-fingerprint | `probe` | `hxfp` | 无 |
 | `packages/fingerprint-audit` | fp-audit | `audit` / `rules` / `probes` | `fp-audit` | 无 |
 | `packages/fingerprint-insight` | fp-insight | `fpinsight` | `fp-insight serve --host --port` | `FPI_DATA_DIR` |
+| `packages/proxy` | hx-pxy (Go 模块) | `github.com/HengXin666/hx-pxy` | `hx-pxyd` | 见 `packages/proxy/README.md` |
 
 ```sh
 uv add "hx-browser @ git+https://github.com/HengXin666/HX-BCP.git@v0.2.0#subdirectory=packages/browser"
