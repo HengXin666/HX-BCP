@@ -4,6 +4,7 @@ import {
   BellRing,
   CheckCircle2,
   CircleX,
+  DoorOpen,
   Globe,
   Info,
   LayoutDashboard,
@@ -28,7 +29,7 @@ import { AuthPage } from "@/pages/auth-page"
 import { api, setCsrfToken, setUnauthenticatedHandler } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
-type Page = "overview" | "subscriptions" | "routing" | "residential" | "rules" | "settings" | "alerts" | "artifacts" | "terminal" | "about"
+type Page = "overview" | "subscriptions" | "routing" | "entry" | "residential" | "rules" | "settings" | "alerts" | "artifacts" | "terminal" | "about"
 type Notice = { id: number; message: string; tone: "success" | "error" }
 const sidebarStorageKey = "hx-pxy.sidebar-collapsed"
 
@@ -40,6 +41,7 @@ const pageLoaders = {
   overview: () => import("@/pages/overview-page"),
   subscriptions: () => import("@/pages/inventory-page"),
   routing: () => import("@/pages/routing-page"),
+  entry: () => import("@/pages/entry-page"),
   residential: () => import("@/pages/residential-page"),
   rules: () => import("@/pages/rules-page"),
   settings: () => import("@/pages/settings-page"),
@@ -55,6 +57,7 @@ const TerminalPage = lazy(() => pageLoaders.terminal().then((module) => ({ defau
 const OverviewPage = lazy(() => pageLoaders.overview().then((module) => ({ default: module.OverviewPage })))
 const InventoryPage = lazy(() => pageLoaders.subscriptions().then((module) => ({ default: module.InventoryPage })))
 const RoutingPage = lazy(() => pageLoaders.routing().then((module) => ({ default: module.RoutingPage })))
+const EntryPage = lazy(() => pageLoaders.entry().then((module) => ({ default: module.EntryPage })))
 const ResidentialPage = lazy(() => pageLoaders.residential().then((module) => ({ default: module.ResidentialPage })))
 const RulesPage = lazy(() => pageLoaders.rules().then((module) => ({ default: module.RulesPage })))
 const SettingsPage = lazy(() => pageLoaders.settings().then((module) => ({ default: module.SettingsPage })))
@@ -84,6 +87,7 @@ const pages: Array<{
   { id: "overview", label: "总览", description: "流量与路由", icon: LayoutDashboard },
   { id: "subscriptions", label: "订阅与节点", description: "来源、刷新与质量", icon: Radio },
   { id: "routing", label: "代理服务", description: "代理组与 Listener", icon: Route },
+  { id: "entry", label: "统一入口", description: "租户, 槽位与订阅", icon: DoorOpen },
   { id: "residential", label: "住宅代理", description: "动态住宅 IP 渠道", icon: Globe },
   { id: "rules", label: "站点别名", description: "可复用网页组", icon: ListFilter },
   { id: "settings", label: "全局配置", description: "测速、DNS 与性能", icon: Settings2 },
@@ -355,6 +359,7 @@ export default function App() {
                 {page === "overview" && <OverviewPage onNotice={showNotice} />}
                 {page === "subscriptions" && <InventoryPage initialView={window.location.hash.includes("nodes") ? "nodes" : "subscriptions"} onNotice={showNotice} />}
                 {page === "routing" && <RoutingPage onNotice={showNotice} />}
+                {page === "entry" && <EntryPage onNotice={showNotice} />}
                 {page === "residential" && <ResidentialPage onNotice={showNotice} />}
                 {page === "rules" && <RulesPage onNotice={showNotice} />}
                 {page === "settings" && <SettingsPage onNotice={showNotice} username={authGate.username} onSignedOut={requireLogin} />}

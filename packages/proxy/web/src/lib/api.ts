@@ -102,6 +102,11 @@ export function setUnauthenticatedHandler(handler: (() => void) | null) {
   onUnauthenticated = handler
 }
 
+// apiRequest is the shared request path for API modules split out of this file.
+export function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  return request<T>(path, init)
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase()
   if (method === "GET") {
