@@ -1,0 +1,50 @@
+[Unit]
+Description=HX-Pxy Mihomo Data Plane
+Documentation=https://github.com/HengXin666/hx-pxy
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=20
+
+[Service]
+Type=simple
+LogNamespace=hx-pxy
+User=hx-pxy
+Group=hx-pxy
+WorkingDirectory=/var/lib/hx-pxy/runtime
+Environment=GOMAXPROCS=4
+UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY FTP_PROXY NO_PROXY http_proxy https_proxy all_proxy ftp_proxy no_proxy
+ExecStartPre=/usr/local/lib/hx-pxy/current/mihomo -t -d /var/lib/hx-pxy/runtime -f /var/lib/hx-pxy/runtime/active.yaml
+ExecStart=/usr/local/lib/hx-pxy/current/mihomo -d /var/lib/hx-pxy/runtime -f /var/lib/hx-pxy/runtime/active.yaml
+Restart=on-failure
+RestartSec=3s
+TimeoutStartSec=30s
+TimeoutStopSec=20s
+KillSignal=SIGTERM
+UMask=0077
+LimitNOFILE=1048576
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectHostname=true
+ProtectClock=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/hx-pxy/runtime
+
+[Install]
+WantedBy=multi-user.target

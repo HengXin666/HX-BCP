@@ -1,0 +1,220 @@
+openapi: 3.1.0
+info:
+  title: HX-Pxy residential channel control API
+  version: "2"
+  description: |
+    Control-token API of one residential channel: a fixed pool of declared
+    logical nodes whose residential exit the consumer rotates on demand, guarded
+    by exclusive leases and an allocation-version compare-and-swap. This is a
+    different resource from subscription proxy services
+    (subscription-consumer.openapi.yaml): it never lists subscription nodes and
+    subscription services never expose leases or rotation. Contract sources:
+    docs/RESIDENTIAL_V2_CONTRACT.md and docs/RESIDENTIAL_INTEGRATION_STANDARD.md.
+    The control token can spend provider quota; treat it as a password. Unknown,
+    disabled or non-sticky tokens and out-of-range indexes all return 404.
+servers:
+  - url: https://proxy.example.com
+paths:
+  /ctl/{controlToken}/nodes:
+    get:
+      operationId: listChannelNodes
+      parameters: [{ $ref: "#/components/parameters/ControlToken" }]
+      responses:
+        "200":
+          description: Declared node pool. Never contains another holder's lease_id.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChannelNodes" }
+        "404": { description: Not found }
+  /ctl/{controlToken}/nodes/{index}/next:
+    post:
+      operationId: rotateNode
+      summary: Replace this node's residential exit; name and credentials stay.
+      parameters: [{ $ref: "#/components/parameters/ControlToken" }, { $ref: "#/components/parameters/Index" }]
+      requestBody:
+        required: false
+        content:
+          application/json: { schema: { $ref: "#/components/schemas/RotateGuard" } }
+      responses:
+        "200": { $ref: "#/components/responses/Node" }
+        "404": { description: Not found }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502": { $ref: "#/components/responses/ProviderUnreachable" }
+  /ctl/{controlToken}/nodes/{index}/route:
+    post:
+      operationId: routeNode
+      parameters: [{ $ref: "#/components/parameters/ControlToken" }, { $ref: "#/components/parameters/Index" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/RotateGuard"
+                - type: object
+                  required: [route_mode]
+                  properties:
+                    route_mode: { type: string, enum: [residential, upstream, direct] }
+      responses:
+        "200": { $ref: "#/components/responses/Node" }
+        "404": { description: Not found }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+  /ctl/{controlToken}/nodes/{index}/claim:
+    post:
+      operationId: claimNode
+      parameters: [{ $ref: "#/components/parameters/ControlToken" }, { $ref: "#/components/parameters/Index" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [holder]
+              properties:
+                holder: { type: string, maxLength: 64 }
+                ttl_seconds: { type: integer, minimum: 60, maximum: 86400, default: 300 }
+      responses:
+        "200": { $ref: "#/components/responses/Node" }
+        "404": { description: Not found }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+  /ctl/{controlToken}/nodes/{index}/heartbeat:
+    post:
+      operationId: heartbeatNode
+      parameters: [{ $ref: "#/components/parameters/ControlToken" }, { $ref: "#/components/parameters/Index" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lease_id]
+              properties:
+                lease_id: { type: string }
+                ttl_seconds: { type: integer, minimum: 60, maximum: 86400, default: 300 }
+      responses:
+        "200": { $ref: "#/components/responses/Node" }
+        "404": { description: Not found }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /ctl/{controlToken}/nodes/{index}/release:
+    post:
+      operationId: releaseNode
+      summary: Idempotent; an old lease_id never clears a newer lease.
+      parameters: [{ $ref: "#/components/parameters/ControlToken" }, { $ref: "#/components/parameters/Index" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lease_id]
+              properties:
+                lease_id: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Node" }
+        "404": { description: Not found }
+components:
+  parameters:
+    ControlToken:
+      name: controlToken
+      in: path
+      required: true
+      schema: { type: string }
+    Index:
+      name: index
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1, maximum: 64 }
+  responses:
+    Node:
+      description: The node after the operation. claim and heartbeat include lease.lease_id for the holder.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ChannelNode" }
+    Conflict:
+      description: "error.code is one of lease_held, lease_expired, alloc_version_changed, conflict (provider capacity)"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: "error.code rotate_rate_limited"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ProviderUnreachable:
+      description: "error.code provider_unreachable"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Invalid:
+      description: "error.code validation_failed"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+              enum: [lease_held, lease_expired, alloc_version_changed, conflict, rotate_rate_limited, provider_unreachable, validation_failed, invalid_request, not_found]
+            message: { type: string, description: Human text; never parse it }
+            request_id: { type: string }
+    RotateGuard:
+      type: object
+      properties:
+        lease_id: { type: string, description: Required once another holder leases the node }
+        expected_alloc_version: { type: integer, description: Compare-and-swap guard against double rotation }
+    ChannelNodes:
+      type: object
+      required: [channel, nodes]
+      properties:
+        channel: { type: string }
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/ChannelNode" }
+    ChannelNode:
+      type: object
+      required: [index, node_name, endpoints, proxy_url, route_mode, alloc_version]
+      properties:
+        index: { type: integer }
+        node_name: { type: string }
+        endpoints:
+          type: array
+          items:
+            type: object
+            required: [protocol, transport, uri, browser_compatible]
+            properties:
+              protocol: { type: string }
+              transport: { type: string }
+              uri: { type: string }
+              browser_compatible: { type: boolean }
+        proxy_url: { type: ["string", "null"] }
+        hint: { type: string }
+        exit_ip: { type: string }
+        country_code: { type: string }
+        route_mode: { type: string, enum: [residential, upstream, direct] }
+        alloc_version: { type: integer }
+        lease:
+          type: object
+          properties:
+            holder: { type: string }
+            lease_id: { type: string, description: Only in claim / heartbeat responses }
+            expires_at: { type: string, format: date-time }
+        residential_endpoint:
+          type: object
+          description: API-extraction providers only, once allocated; never in /sub/ or admin views.
+          properties:
+            protocol: { type: string }
+            server: { type: string }
+            port: { type: integer }
+            username: { type: string }
+            password: { type: string }
+            tls: { type: boolean }

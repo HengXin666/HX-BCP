@@ -1,0 +1,109 @@
+openapi: 3.1.0
+info:
+  title: HX-Pxy subscription service consumer API
+  version: "1"
+  description: |
+    Token-addressed, read-only export of one proxy service (a subscription-backed
+    group or a pinned node behind a listener). It never rotates exits and never
+    takes leases: residential channels are a separate resource with their own
+    control API (residential-control.openapi.yaml). Contract source of truth:
+    docs/CONSUMER_INTEGRATION_CONTRACT.md. Clients depend on HTTP status codes
+    only. Responses carry Cache-Control: no-store.
+
+    Compatibility note: /nodes/{shareToken} historically also accepts a
+    residential channel share token and returns the same read-only shape. New
+    residential integrations must use /ctl/ instead.
+servers:
+  - url: https://proxy.example.com
+paths:
+  /nodes/{shareToken}:
+    get:
+      operationId: getServiceNodes
+      summary: JSON node listing of one proxy service
+      parameters:
+        - $ref: "#/components/parameters/ShareToken"
+      responses:
+        "200":
+          description: Node listing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceNodes" }
+        "404": { description: Unknown, disabled or non-exportable token (indistinguishable by design) }
+        "405": { description: Method other than GET }
+        "500": { description: Control plane failure; back off and retry }
+  /sub/{shareToken}:
+    get:
+      operationId: getServiceSubscription
+      summary: Client subscription in one of four renderings
+      parameters:
+        - $ref: "#/components/parameters/ShareToken"
+        - name: format
+          in: query
+          required: false
+          schema: { type: string, enum: [clash, v2rayn, sing-box, uri] }
+      responses:
+        "200":
+          description: |
+            Rendered subscription. The media type follows the format:
+            v2rayn (default) is a base64 URI list and uri a plain URI list
+            (text/plain), clash is a Mihomo YAML document (application/yaml),
+            sing-box is an outbound JSON document (application/json). The
+            X-HX-Subscription-Format header names the rendering served.
+          headers:
+            X-HX-Subscription-Format:
+              schema: { type: string, enum: [clash, v2rayn, sing-box, uri] }
+          content:
+            text/plain: { schema: { type: string } }
+            application/yaml: { schema: { type: string } }
+            application/json: { schema: { type: object } }
+        "404": { description: Unknown or disabled token }
+components:
+  parameters:
+    ShareToken:
+      name: shareToken
+      in: path
+      required: true
+      description: The share token in the listener's share_path. Treat as a password.
+      schema: { type: string, minLength: 16, maxLength: 64 }
+  schemas:
+    ServiceNodes:
+      type: object
+      required: [name, share_path, subscription_urls, nodes]
+      properties:
+        name: { type: string }
+        share_path: { type: string, examples: ["/sub/8f3a...c1"] }
+        subscription_urls:
+          type: object
+          required: [clash, v2rayn, sing-box, uri]
+          properties:
+            clash: { type: string }
+            v2rayn: { type: string }
+            sing-box: { type: string }
+            uri: { type: string }
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/ServiceNode" }
+    ServiceNode:
+      type: object
+      required: [name, protocol, host, port, auth, transport, tls, browser_compatible, uri]
+      properties:
+        name: { type: string }
+        protocol:
+          type: string
+          enum: [mixed, http, socks, vless, vmess, trojan]
+          description: Closed set; reject unknown values.
+        host: { type: string }
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        auth:
+          oneOf:
+            - type: "null"
+            - type: object
+              properties:
+                username: { type: string }
+                password: { type: string }
+        transport: { type: string, enum: [tcp, ws] }
+        ws_path: { type: string, description: Present only when transport is ws }
+        tls: { type: boolean }
+        server_name: { type: string, description: Present only when tls is true }
+        browser_compatible: { type: boolean, description: Always false for ws transport }
+        uri: { type: string }

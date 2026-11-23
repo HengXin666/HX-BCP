@@ -1,0 +1,53 @@
+[Unit]
+Description=HX-Pxy Control Plane
+Documentation=https://github.com/HengXin666/hx-pxy
+Wants=network-online.target
+Requires=hx-pxy-dataplane.service hx-pxy-terminal.service
+After=network-online.target hx-pxy-dataplane.service hx-pxy-terminal.service
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+LogNamespace=hx-pxy
+User=hx-pxy
+Group=hx-pxy
+WorkingDirectory=/var/lib/hx-pxy
+ExecStart=/usr/local/lib/hx-pxy/current/hx-pxyd --listen 127.0.0.1:19090 --data-dir /var/lib/hx-pxy --config /etc/hx-pxy/config.yaml --database /var/lib/hx-pxy/hx-pxy.db --master-key /var/lib/hx-pxy/master.key --runtime-config /var/lib/hx-pxy/runtime/active.yaml --snapshots /var/lib/hx-pxy/snapshots --web-root /usr/local/lib/hx-pxy/current/web --mihomo /usr/local/lib/hx-pxy/current/mihomo --mihomo-external --terminal-socket /run/hx-pxy/terminal.sock
+Restart=on-failure
+RestartSec=3s
+TimeoutStartSec=30s
+TimeoutStopSec=20s
+KillSignal=SIGTERM
+UMask=0077
+LimitNOFILE=1048576
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectHostname=true
+ProtectClock=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+# AF_NETLINK is required: Go's net.Interfaces()/net.InterfaceAddrs() read the
+# link table over NETLINK_ROUTE. Without it the control plane silently sees
+# zero interfaces, so Docker bridge / LAN discovery reports "no bridge" on a
+# host that has them, and companion entries are withheld as unreachable.
+# The data plane's optional TUN drop-in grants the same family for Mihomo.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/hx-pxy
+
+[Install]
+WantedBy=multi-user.target
