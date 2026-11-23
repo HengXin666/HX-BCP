@@ -96,6 +96,16 @@ jobs:
               with:
                   go-version-file: packages/proxy/go.mod
                   cache-dependency-path: packages/proxy/go.sum
+            - name: 下载固定版本数据面 (端到端测试要真 mihomo)
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  MIHOMO_VERSION: v1.19.29
+              run: |
+                  gh release download "${MIHOMO_VERSION}" --repo MetaCubeX/mihomo \
+                    --pattern "mihomo-linux-amd64-${MIHOMO_VERSION}.gz" --dir "${RUNNER_TEMP}"
+                  gzip -dc "${RUNNER_TEMP}/mihomo-linux-amd64-${MIHOMO_VERSION}.gz" > "${RUNNER_TEMP}/mihomo"
+                  chmod 0755 "${RUNNER_TEMP}/mihomo"
+                  printf '%s\n' "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
             - name: vet
               run: go vet ./...
             - name: test
