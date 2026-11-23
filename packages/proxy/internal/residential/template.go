@@ -8,6 +8,7 @@ package residential
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -20,8 +21,9 @@ const (
 )
 
 // Placeholder names accepted inside a username template. Vendors differ only in
-// the literal separators around these values, so a template plus this fixed set
-// covers the common gateway dialects without hard-coding any single vendor.
+// the literal separators around these values and in how a value is spelled, so a
+// template plus this fixed set plus the filters below covers the common gateway
+// dialects without hard-coding any single vendor.
 const (
 	PlaceholderUser    = "user"
 	PlaceholderSession = "session"
@@ -42,6 +44,22 @@ func SupportedPlaceholders() []string {
 		PlaceholderCity,
 		PlaceholderTTL,
 	}
+}
+
+// Filters accepted after a placeholder name, as in {ttl|min} or {country|lower}.
+// TTL values are always passed in seconds, the filters convert them to the unit a
+// vendor expects. Case filters apply to any placeholder.
+const (
+	FilterLower   = "lower"
+	FilterUpper   = "upper"
+	FilterSeconds = "sec"
+	FilterMinutes = "min"
+	FilterHours   = "hour"
+)
+
+// SupportedFilters lists every filter a placeholder may carry, in display order.
+func SupportedFilters() []string {
+	return []string{FilterLower, FilterUpper, FilterSeconds, FilterMinutes, FilterHours}
 }
 
 // Variables carries the values substituted into a username template.
@@ -132,10 +150,17 @@ func Render(template string, variables Variables) (string, error) {
 		if end < 0 {
 			return "", fmt.Errorf("%w: unterminated placeholder", ErrInvalidTemplate)
 		}
-		name := remaining[start+1 : start+end]
+		name, filter, err := splitPlaceholder(remaining[start+1 : start+end])
+		if err != nil {
+			return "", err
+		}
 		value, known := variables.lookup(name)
 		if !known {
 			return "", fmt.Errorf("%w: unknown placeholder %q", ErrInvalidTemplate, name)
+		}
+		value, err = applyFilter(name, filter, value)
+		if err != nil {
+			return "", err
 		}
 		if err := validateSegment(name, value); err != nil {
 			return "", err
@@ -168,9 +193,9 @@ func placeholderNames(template string) (map[string]struct{}, error) {
 		if end < 0 {
 			return nil, fmt.Errorf("%w: unterminated placeholder", ErrInvalidTemplate)
 		}
-		name := remaining[start+1 : start+end]
-		if name == "" {
-			return nil, fmt.Errorf("%w: empty placeholder", ErrInvalidTemplate)
+		name, _, err := splitPlaceholder(remaining[start+1 : start+end])
+		if err != nil {
+			return nil, err
 		}
 		if _, known := (Variables{}).lookup(name); !known {
 			return nil, fmt.Errorf(
@@ -207,4 +232,62 @@ func validateSegment(name, value string) error {
 		}
 	}
 	return nil
+}
+
+// splitPlaceholder separates a placeholder body into its name and optional filter.
+func splitPlaceholder(body string) (string, string, error) {
+	name, filter, hasFilter := strings.Cut(body, "|")
+	if name == "" {
+		return "", "", fmt.Errorf("%w: empty placeholder", ErrInvalidTemplate)
+	}
+	if !hasFilter {
+		return name, "", nil
+	}
+	for _, known := range SupportedFilters() {
+		if filter == known {
+			if isUnitFilter(filter) && name != PlaceholderTTL {
+				return "", "", fmt.Errorf("%w: filter %q only applies to {%s}", ErrInvalidTemplate, filter, PlaceholderTTL)
+			}
+			return name, filter, nil
+		}
+	}
+	return "", "", fmt.Errorf(
+		"%w: unknown filter %q, supported: %s",
+		ErrInvalidTemplate,
+		filter,
+		strings.Join(SupportedFilters(), ", "),
+	)
+}
+
+// isUnitFilter reports whether a filter converts a TTL in seconds to another unit.
+func isUnitFilter(filter string) bool {
+	return filter == FilterSeconds || filter == FilterMinutes || filter == FilterHours
+}
+
+// applyFilter rewrites one substituted value with its filter. Unit filters round
+// up, so a positive TTL never renders as zero.
+func applyFilter(name, filter, value string) (string, error) {
+	switch filter {
+	case "":
+		return value, nil
+	case FilterLower:
+		return strings.ToLower(value), nil
+	case FilterUpper:
+		return strings.ToUpper(value), nil
+	}
+	if value == "" {
+		return value, nil
+	}
+	seconds, err := strconv.Atoi(value)
+	if err != nil || seconds < 0 {
+		return "", fmt.Errorf("%w: %s value %q is not a non-negative number of seconds", ErrInvalidTemplate, name, value)
+	}
+	divisor := 1
+	switch filter {
+	case FilterMinutes:
+		divisor = 60
+	case FilterHours:
+		divisor = 3600
+	}
+	return strconv.Itoa((seconds + divisor - 1) / divisor), nil
 }

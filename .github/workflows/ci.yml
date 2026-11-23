@@ -83,3 +83,20 @@ jobs:
               run: pnpm typecheck
             - name: build
               run: pnpm build
+
+    proxy:
+        name: 统一出口代理 (Go)
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: packages/proxy
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-go@v5
+              with:
+                  go-version-file: packages/proxy/go.mod
+                  cache-dependency-path: packages/proxy/go.sum
+            - name: vet
+              run: go vet ./...
+            - name: test
+              run: go test ./...

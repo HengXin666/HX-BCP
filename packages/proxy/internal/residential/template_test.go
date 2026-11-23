@@ -178,7 +178,7 @@ func TestBestProxyPresetRendersVerifiedGatewaySyntax(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render() error = %v", err)
 	}
-	const want = "acct123_area-US_life-60_session-stable1234"
+	const want = "acct123_area-US_life-1_session-stable1234"
 	if rendered != want {
 		t.Fatalf("Render() = %q, want %q", rendered, want)
 	}
@@ -218,7 +218,7 @@ func TestRapidProxyPresetRendersGatewaySyntax(t *testing.T) {
 		User:    "hxloli666",
 		Region:  "GLOBAL",
 		Session: "42441522",
-		TTL:     "10",
+		TTL:     "600",
 	})
 	if err != nil {
 		t.Fatalf("Render() error = %v", err)
@@ -242,7 +242,7 @@ func TestRapidProxyPresetRendersCountryCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render() error = %v", err)
 	}
-	const want = "acct123-residential-US-session-stable12345-stime-60"
+	const want = "acct123-residential-US-session-stable12345-stime-1"
 	if rendered != want {
 		t.Fatalf("Render() = %q, want %q", rendered, want)
 	}
@@ -285,4 +285,42 @@ func slicesContains(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestRenderAppliesFilters(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		template string
+		ttl      string
+		want     string
+	}{
+		{"{user}-cc-{country|lower}-t-{ttl|min}", "61", "acct-cc-us-t-2"},
+		{"{user}-cc-{country|upper}-t-{ttl|sec}", "600", "acct-cc-US-t-600"},
+		{"{user}-t-{ttl|hour}", "3601", "acct-t-2"},
+		{"{user}-t-{ttl|min}", "", "acct-t-"},
+		{"{user}-t-{ttl}", "600", "acct-t-600"},
+	}
+	for _, item := range cases {
+		rendered, err := Render(item.template, Variables{User: "acct", Country: "Us", TTL: item.ttl})
+		if err != nil {
+			t.Fatalf("Render(%q) error = %v", item.template, err)
+		}
+		if rendered != item.want {
+			t.Errorf("Render(%q) = %q, want %q", item.template, rendered, item.want)
+		}
+	}
+}
+
+func TestRenderRejectsBadFilters(t *testing.T) {
+	t.Parallel()
+
+	for _, template := range []string{"{user}-{ttl|days}", "{user}-{country|min}", "{user}-{|lower}"} {
+		if err := ValidateTemplate(template); !errors.Is(err, ErrInvalidTemplate) {
+			t.Errorf("ValidateTemplate(%q) = %v, want ErrInvalidTemplate", template, err)
+		}
+	}
+	if _, err := Render("{user}-{ttl|min}", Variables{User: "acct", TTL: "abc"}); !errors.Is(err, ErrInvalidTemplate) {
+		t.Errorf("Render with non-numeric ttl = %v, want ErrInvalidTemplate", err)
+	}
 }
